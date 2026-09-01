@@ -3,7 +3,7 @@
 // 1. Desplegar apps-script/Code.gs como Web App (ver docs/02-GUIA-DESPLIEGUE.md).
 // 2. Pegar acá la URL que termina en /exec.
 const APP_CONFIG = {
-  APPS_SCRIPT_URL: 'PEGAR_AQUI_LA_URL_/exec_DE_TU_WEB_APP',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxBkIEn9GGh8yRL4OUiMfOTZHeZo4IaHU4yC_ub1jqBCSdOtFkQbYM3bNRiUi_sfhtfFQ/exec',
 
   OPERARIOS: ['Mariano', 'Emiliano', 'Gonzalo'],
 
