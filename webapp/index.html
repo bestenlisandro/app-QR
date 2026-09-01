@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14171a">
+<title>Control de Producción QR</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🏭 Control de Producción</h1>
+  <div id="topbar-operario" class="pill" style="display:none;"></div>
+</div>
+
+<main>
+
+  <!-- SCREEN: LOGIN -->
+  <section id="screen-login" class="screen">
+    <div class="card">
+      <h2>¿Quién sos?</h2>
+      <p class="hint">Elegí tu nombre para empezar a fichar tiempos.</p>
+      <div id="operario-grid" class="operario-grid"></div>
+    </div>
+    <p id="config-warning" class="hint" style="display:none;color:#e74c3c;text-align:center;">
+      ⚠️ Falta configurar la URL del Web App en <code>webapp/config.js</code>.
+    </p>
+  </section>
+
+  <!-- SCREEN: HOME (sin tarea activa) -->
+  <section id="screen-home" class="screen">
+    <div class="card" style="text-align:center;">
+      <h2>Sin tarea activa</h2>
+      <p class="hint">Escaneá el código QR de la hoja de ruta para iniciar una operación.</p>
+      <button class="btn btn-lg" id="btn-abrir-scanner">📷 ESCANEAR QR</button>
+      <a href="#" class="link-quiet" id="link-manual" style="margin-top:14px;">Ingresar datos manualmente</a>
+    </div>
+    <button class="btn btn-secondary" id="btn-cambiar-operario-home">Cambiar de operario</button>
+  </section>
+
+  <!-- SCREEN: MANUAL ENTRY (fallback sin cámara) -->
+  <section id="screen-manual" class="screen">
+    <div class="card">
+      <h2>Ingreso manual</h2>
+      <p class="hint">Usalo solo si la cámara no está disponible.</p>
+      <div class="field">
+        <label>Proyecto</label>
+        <select id="manual-proyecto"></select>
+      </div>
+      <div class="field">
+        <label>Operación</label>
+        <select id="manual-operacion"></select>
+      </div>
+      <button class="btn" id="btn-manual-continuar">Continuar</button>
+      <button class="btn btn-secondary" id="btn-manual-cancelar" style="margin-top:10px;">Cancelar</button>
+    </div>
+  </section>
+
+  <!-- SCREEN: SCANNER -->
+  <section id="screen-scanner" class="screen">
+    <div class="card">
+      <h2>Escaneando…</h2>
+      <p class="hint">Apuntá la cámara al QR de la hoja de ruta.</p>
+      <div id="qr-reader"></div>
+      <button class="btn btn-secondary" id="btn-cancelar-scanner" style="margin-top:14px;">Cancelar</button>
+    </div>
+  </section>
+
+  <!-- SCREEN: CONFIRMAR INICIO -->
+  <section id="screen-confirm" class="screen">
+    <div class="card">
+      <h2>Confirmar inicio</h2>
+      <div class="info-row"><span class="k">Proyecto</span><span class="v" id="confirm-proyecto">-</span></div>
+      <div class="info-row"><span class="k">Cliente</span><span class="v" id="confirm-cliente">-</span></div>
+      <div class="info-row"><span class="k">Operación</span><span class="v" id="confirm-operacion">-</span></div>
+      <div class="info-row"><span class="k">Operario</span><span class="v" id="confirm-operario">-</span></div>
+      <button class="btn btn-success btn-lg" id="btn-iniciar" style="margin-top:16px;">▶ INICIAR OPERACIÓN</button>
+      <button class="btn btn-secondary" id="btn-confirm-cancelar" style="margin-top:10px;">Cancelar</button>
+    </div>
+  </section>
+
+  <!-- SCREEN: TIMER -->
+  <section id="screen-timer" class="screen">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 id="timer-operacion">Operación</h2>
+        <span class="badge" id="timer-badge">En Curso</span>
+      </div>
+      <div class="timer-display" id="timer-display">00:00:00</div>
+      <div class="info-row"><span class="k">Proyecto</span><span class="v" id="timer-proyecto">-</span></div>
+      <div class="info-row"><span class="k">Cliente</span><span class="v" id="timer-cliente">-</span></div>
+      <div class="info-row"><span class="k">Operario</span><span class="v" id="timer-operario">-</span></div>
+      <div class="info-row"><span class="k">Inicio</span><span class="v" id="timer-inicio">-</span></div>
+
+      <div class="btn-row" style="margin-top:18px;">
+        <button class="btn btn-info" id="btn-pausar">⏸ PAUSAR</button>
+        <button class="btn btn-danger" id="btn-finalizar">■ FINALIZAR</button>
+      </div>
+    </div>
+    <button class="btn btn-secondary" id="btn-cambiar-operario-timer">Cambiar de operario</button>
+  </section>
+
+  <!-- SCREEN: LOADING -->
+  <section id="screen-loading" class="screen active">
+    <div class="card" style="text-align:center;">
+      <div class="spinner"></div>
+      <p class="hint" style="margin-top:12px;">Cargando…</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">Control de Tiempos de Producción · Taller</footer>
+<div id="toast" class="toast"></div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// ESTADO
+// ---------------------------------------------------------------------------
+let currentOperario = localStorage.getItem('cp_operario') || null;
+let currentTarea = null;      // registro activo (En Curso / Pausado)
+let pendingScan = null;       // { proyecto_id, operacion_id, operacion_nombre, cliente }
+let html5QrCode = null;
+let timerInterval = null;
+
+const screens = ['login','home','manual','scanner','confirm','timer','loading'];
+function showScreen(name) {
+  screens.forEach(s => document.getElementById('screen-' + s).classList.toggle('active', s === name));
+}
+
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function updateTopbar() {
+  const el = document.getElementById('topbar-operario');
+  if (currentOperario) {
+    el.style.display = 'inline-flex';
+    el.textContent = '👤 ' + currentOperario;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// LOGIN
+// ---------------------------------------------------------------------------
+function renderOperarioGrid() {
+  const grid = document.getElementById('operario-grid');
+  grid.innerHTML = '';
+  APP_CONFIG.OPERARIOS.forEach(nombre => {
+    const btn = document.createElement('button');
+    btn.className = 'operario-btn';
+    btn.innerHTML = `<span class="avatar">${nombre[0]}</span><span>${nombre}</span>`;
+    btn.onclick = () => seleccionarOperario(nombre);
+    grid.appendChild(btn);
+  });
+}
+
+function seleccionarOperario(nombre) {
+  currentOperario = nombre;
+  localStorage.setItem('cp_operario', nombre);
+  updateTopbar();
+  cargarEstadoOperario();
+}
+
+function cambiarOperario() {
+  currentOperario = null;
+  currentTarea = null;
+  localStorage.removeItem('cp_operario');
+  detenerTimer();
+  updateTopbar();
+  showScreen('login');
+}
+
+// ---------------------------------------------------------------------------
+// ESTADO DEL OPERARIO (restaurar tarea activa al entrar / refrescar)
+// ---------------------------------------------------------------------------
+async function cargarEstadoOperario() {
+  showScreen('loading');
+  try {
+    const res = await Api.get('estadoOperario', { operario: currentOperario });
+    if (!res.ok) throw new Error(res.error || 'Error al consultar estado');
+    if (res.tiene_tarea_activa) {
+      currentTarea = res.tarea;
+      mostrarTimer();
+    } else {
+      currentTarea = null;
+      showScreen('home');
+    }
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+    showScreen('home');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ESCÁNER QR
+// ---------------------------------------------------------------------------
+function abrirScanner() {
+  showScreen('scanner');
+  html5QrCode = new Html5Qrcode('qr-reader');
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 240, height: 240 } },
+    onScanSuccess,
+    () => {} // errores de frame individual, se ignoran
+  ).catch(err => {
+    toast('No se pudo abrir la cámara: ' + err, 'error');
+    showScreen('home');
+  });
+}
+
+function cerrarScanner() {
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => {});
+  }
+}
+
+async function onScanSuccess(decodedText) {
+  cerrarScanner();
+  let data;
+  try {
+    data = JSON.parse(decodedText);
+  } catch (e) {
+    toast('QR inválido: no contiene datos reconocibles', 'error');
+    showScreen('home');
+    return;
+  }
+  if (!data.proyecto_id || !data.operacion_id || !data.operacion_nombre) {
+    toast('QR inválido: faltan datos de proyecto u operación', 'error');
+    showScreen('home');
+    return;
+  }
+  await prepararConfirmacion(data.proyecto_id, data.operacion_id, data.operacion_nombre);
+}
+
+// ---------------------------------------------------------------------------
+// INGRESO MANUAL (fallback)
+// ---------------------------------------------------------------------------
+async function abrirManual() {
+  showScreen('loading');
+  try {
+    const res = await Api.get('proyectosActivos');
+    const sel = document.getElementById('manual-proyecto');
+    sel.innerHTML = '';
+    (res.proyectos || []).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id_proyecto;
+      opt.dataset.cliente = p.cliente || '';
+      opt.textContent = `${p.id_proyecto} — ${p.cliente || 's/cliente'}`;
+      sel.appendChild(opt);
+    });
+    const selOp = document.getElementById('manual-operacion');
+    selOp.innerHTML = '';
+    APP_CONFIG.OPERACIONES.forEach(op => {
+      const opt = document.createElement('option');
+      opt.value = op.id;
+      opt.dataset.nombre = op.nombre;
+      opt.textContent = op.nombre;
+      selOp.appendChild(opt);
+    });
+    showScreen('manual');
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+    showScreen('home');
+  }
+}
+
+function confirmarManual() {
+  const selP = document.getElementById('manual-proyecto');
+  const selO = document.getElementById('manual-operacion');
+  if (!selP.value || !selO.value) { toast('Completá proyecto y operación', 'error'); return; }
+  prepararConfirmacion(selP.value, selO.value, selO.selectedOptions[0].dataset.nombre, selP.selectedOptions[0]?.dataset.cliente);
+}
+
+// ---------------------------------------------------------------------------
+// CONFIRMACIÓN E INICIO
+// ---------------------------------------------------------------------------
+async function prepararConfirmacion(proyectoId, operacionId, operacionNombre, clienteHint) {
+  pendingScan = { proyecto_id: proyectoId, operacion_id: operacionId, operacion_nombre: operacionNombre, cliente: clienteHint || '' };
+  document.getElementById('confirm-proyecto').textContent = proyectoId;
+  document.getElementById('confirm-cliente').textContent = clienteHint || '—';
+  document.getElementById('confirm-operacion').textContent = operacionNombre;
+  document.getElementById('confirm-operario').textContent = currentOperario;
+  showScreen('confirm');
+
+  // Intentar completar el cliente si no vino (caso QR)
+  if (!clienteHint) {
+    try {
+      const res = await Api.get('proyectosActivos');
+      const p = (res.proyectos || []).find(p => p.id_proyecto === proyectoId);
+      document.getElementById('confirm-cliente').textContent = p ? p.cliente : 'No encontrado en Proyectos';
+    } catch (e) { /* silencioso */ }
+  }
+}
+
+async function iniciarOperacion() {
+  if (!pendingScan) return;
+  const btn = document.getElementById('btn-iniciar');
+  btn.disabled = true;
+  try {
+    const res = await Api.post('iniciar', {
+      operario: currentOperario,
+      proyecto_id: pendingScan.proyecto_id,
+      operacion_id: pendingScan.operacion_id,
+      operacion_nombre: pendingScan.operacion_nombre
+    });
+    if (!res.ok) {
+      if (res.tarea_activa) {
+        currentTarea = res.tarea_activa;
+        toast(res.error, 'error');
+        mostrarTimer();
+        return;
+      }
+      throw new Error(res.error || 'No se pudo iniciar');
+    }
+    if (res.aviso) toast(res.aviso, 'error');
+    currentTarea = res.registro;
+    mostrarTimer();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TIMER
+// ---------------------------------------------------------------------------
+function computeElapsedMinutes(tarea) {
+  const horaInicio = new Date(tarea.hora_inicio);
+  const pausadoAcum = Number(tarea.tiempo_pausado_minutos) || 0;
+  if (tarea.estado === 'Pausado') {
+    const pausaInicio = tarea.pausa_inicio ? new Date(tarea.pausa_inicio) : new Date();
+    return Math.max(0, (pausaInicio - horaInicio) / 60000 - pausadoAcum);
+  }
+  return Math.max(0, (Date.now() - horaInicio.getTime()) / 60000 - pausadoAcum);
+}
+
+function formatHMS(totalMinutes) {
+  const totalSeconds = Math.floor(totalMinutes * 60);
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSeconds % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+function mostrarTimer() {
+  showScreen('timer');
+  document.getElementById('timer-operacion').textContent = currentTarea.operacion;
+  document.getElementById('timer-proyecto').textContent = currentTarea.id_proyecto;
+  document.getElementById('timer-cliente').textContent = pendingScan?.cliente || '—';
+  document.getElementById('timer-operario').textContent = currentTarea.operario;
+  document.getElementById('timer-inicio').textContent = new Date(currentTarea.hora_inicio).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+  const badge = document.getElementById('timer-badge');
+  const display = document.getElementById('timer-display');
+  const btnPausar = document.getElementById('btn-pausar');
+
+  const enPausa = currentTarea.estado === 'Pausado';
+  badge.textContent = enPausa ? 'Pausado' : 'En Curso';
+  badge.className = 'badge ' + (enPausa ? 'badge-pausado' : 'badge-en-curso');
+  display.className = 'timer-display' + (enPausa ? ' pausado' : '');
+  btnPausar.textContent = enPausa ? '▶ REANUDAR' : '⏸ PAUSAR';
+  btnPausar.className = 'btn ' + (enPausa ? 'btn-success' : 'btn-info');
+
+  detenerTimer();
+  actualizarDisplay();
+  timerInterval = setInterval(actualizarDisplay, 1000);
+}
+
+function actualizarDisplay() {
+  if (!currentTarea) return;
+  document.getElementById('timer-display').textContent = formatHMS(computeElapsedMinutes(currentTarea));
+}
+
+function detenerTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+
+async function togglePausa() {
+  const accion = currentTarea.estado === 'Pausado' ? 'reanudar' : 'pausar';
+  const btn = document.getElementById('btn-pausar');
+  btn.disabled = true;
+  try {
+    const res = await Api.post(accion, { id_registro: currentTarea.id_registro, operario: currentOperario });
+    if (!res.ok) throw new Error(res.error || 'No se pudo actualizar');
+    currentTarea = res.registro;
+    mostrarTimer();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function finalizarOperacion() {
+  if (!confirm('¿Confirmás que finalizaste la operación "' + currentTarea.operacion + '"?')) return;
+  const btn = document.getElementById('btn-finalizar');
+  btn.disabled = true;
+  try {
+    const res = await Api.post('finalizar', { id_registro: currentTarea.id_registro, operario: currentOperario });
+    if (!res.ok) throw new Error(res.error || 'No se pudo finalizar');
+    detenerTimer();
+    const horas = Number(res.registro.horas_hombre).toFixed(2);
+    toast(`Operación finalizada. Tiempo neto: ${horas} h`, 'success');
+    currentTarea = null;
+    pendingScan = null;
+    showScreen('home');
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EVENTOS
+// ---------------------------------------------------------------------------
+document.getElementById('btn-abrir-scanner').onclick = abrirScanner;
+document.getElementById('btn-cancelar-scanner').onclick = () => { cerrarScanner(); showScreen('home'); };
+document.getElementById('link-manual').onclick = (e) => { e.preventDefault(); abrirManual(); };
+document.getElementById('btn-manual-cancelar').onclick = () => showScreen('home');
+document.getElementById('btn-manual-continuar').onclick = confirmarManual;
+document.getElementById('btn-confirm-cancelar').onclick = () => { pendingScan = null; showScreen('home'); };
+document.getElementById('btn-iniciar').onclick = iniciarOperacion;
+document.getElementById('btn-pausar').onclick = togglePausa;
+document.getElementById('btn-finalizar').onclick = finalizarOperacion;
+document.getElementById('btn-cambiar-operario-home').onclick = cambiarOperario;
+document.getElementById('btn-cambiar-operario-timer').onclick = cambiarOperario;
+
+// ---------------------------------------------------------------------------
+// INIT
+// ---------------------------------------------------------------------------
+(function init() {
+  renderOperarioGrid();
+  updateTopbar();
+  if (!Api.isConfigured()) {
+    document.getElementById('config-warning').style.display = 'block';
+  }
+  if (currentOperario) {
+    cargarEstadoOperario();
+  } else {
+    showScreen('login');
+  }
+})();
+</script>
+</body>
+</html>

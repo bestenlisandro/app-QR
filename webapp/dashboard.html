@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14171a">
+<title>Dashboard de Producción</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  main { max-width: 1100px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 900px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+  .operarios-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 720px) { .operarios-grid { grid-template-columns: repeat(3, 1fr); } }
+  .operario-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .operario-card .nombre { font-size: 1.1rem; font-weight: 800; display:flex; justify-content:space-between; align-items:center; }
+  .operario-card .cronometro { font-size: 1.8rem; font-weight: 800; color: var(--amber); text-align: center; margin: 10px 0; font-variant-numeric: tabular-nums; }
+  .operario-card .tarea-info { font-size: .85rem; color: var(--text-dim); text-align: center; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  table.proj-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  table.proj-table th, table.proj-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  table.proj-table th { color: var(--text-dim); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>📊 Dashboard de Producción</h1>
+  <div class="pill"><span class="live-dot"></span><span id="last-update">actualizando…</span></div>
+</div>
+
+<main>
+
+  <p id="config-warning" class="hint" style="display:none;color:#e74c3c;text-align:center;">
+    ⚠️ Falta configurar la URL del Web App en <code>webapp/config.js</code>.
+  </p>
+
+  <!-- KPIs generales del taller -->
+  <div class="kpi-grid">
+    <div class="kpi"><div class="num" id="kpi-hoy">0.0</div><div class="lbl">Horas-Hombre hoy</div></div>
+    <div class="kpi"><div class="num" id="kpi-total">0.0</div><div class="lbl">Horas-Hombre histórico</div></div>
+    <div class="kpi"><div class="num" id="kpi-activas">0</div><div class="lbl">Tareas en curso ahora</div></div>
+    <div class="kpi"><div class="num" id="kpi-finalizadas">0</div><div class="lbl">Tareas finalizadas hoy</div></div>
+  </div>
+
+  <!-- Estado en vivo por operario -->
+  <div class="card">
+    <h2>Estado por operario</h2>
+    <div class="operarios-grid" id="operarios-grid"></div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Horas por operación -->
+    <div class="op-card">
+      <div class="op-card-header"><span class="nombre">Horas-Hombre por operación</span></div>
+      <div id="operaciones-bars"></div>
+    </div>
+
+    <!-- Horas por operario -->
+    <div class="op-card">
+      <div class="op-card-header"><span class="nombre">Horas-Hombre por operario</span></div>
+      <div id="operarios-bars"></div>
+    </div>
+  </div>
+
+  <!-- Horas por proyecto -->
+  <div class="card">
+    <h2>Horas-Hombre por proyecto</h2>
+    <div style="overflow-x:auto;">
+      <table class="proj-table">
+        <thead><tr><th>Proyecto</th><th>Horas-Hombre</th><th>Desglose por operación</th></tr></thead>
+        <tbody id="proyectos-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<footer class="foot">Se actualiza automáticamente cada <span id="poll-secs">6</span> segundos.</footer>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+document.getElementById('poll-secs').textContent = Math.round(APP_CONFIG.DASHBOARD_POLL_MS / 1000);
+
+function fmtHoras(n) { return (Number(n) || 0).toFixed(2); }
+
+function formatHMSFromMinutes(min) {
+  const totalSeconds = Math.floor((Number(min) || 0) * 60);
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSeconds % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+let lastData = null;
+let tickInterval = null;
+
+function renderKpis(d) {
+  document.getElementById('kpi-hoy').textContent = fmtHoras(d.totales.horas_hombre_hoy);
+  document.getElementById('kpi-total').textContent = fmtHoras(d.totales.horas_hombre_total);
+  document.getElementById('kpi-activas').textContent = d.tareas_activas.length;
+  document.getElementById('kpi-finalizadas').textContent = d.totales.tareas_finalizadas_hoy;
+}
+
+function renderOperarios(d) {
+  const grid = document.getElementById('operarios-grid');
+  grid.innerHTML = '';
+  Object.entries(d.por_operario).forEach(([nombre, info]) => {
+    const div = document.createElement('div');
+    div.className = 'operario-card';
+    const estado = info.estado || 'Libre';
+    const badgeClass = estado === 'En Curso' ? 'badge-en-curso' : estado === 'Pausado' ? 'badge-pausado' : 'badge-libre';
+    const tarea = info.tarea_actual;
+    div.innerHTML = `
+      <div class="nombre">${nombre} <span class="badge ${badgeClass}">${estado}</span></div>
+      <div class="cronometro" data-min="${tarea ? tarea.minutos_transcurridos : 0}" data-live="${estado === 'En Curso' ? '1' : '0'}">
+        ${tarea ? formatHMSFromMinutes(tarea.minutos_transcurridos) : '—'}
+      </div>
+      <div class="tarea-info">
+        ${tarea ? `${tarea.operacion}<br>Proyecto ${tarea.proyecto}` : 'Sin tarea activa'}
+      </div>
+      <div class="tarea-info" style="margin-top:6px;">Total finalizado: ${fmtHoras(info.horas_hombre)} h</div>
+    `;
+    grid.appendChild(div);
+  });
+}
+
+function renderBars(containerId, dataObj, colorVar) {
+  const container = document.getElementById(containerId);
+  const entries = Object.entries(dataObj);
+  const max = Math.max(1, ...entries.map(([,v]) => v));
+  container.innerHTML = entries.map(([label, value]) => `
+    <div class="bar-row">
+      <div class="label">${label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, (value / max) * 100)}%"></div></div>
+      <div class="value">${fmtHoras(value)} h</div>
+    </div>
+  `).join('') || '<p class="hint">Sin datos todavía.</p>';
+}
+
+function renderProyectos(d) {
+  const tbody = document.getElementById('proyectos-tbody');
+  const entries = Object.entries(d.por_proyecto);
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="hint">Sin datos todavía.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries
+    .sort((a, b) => b[1].horas_hombre - a[1].horas_hombre)
+    .map(([proyecto, info]) => {
+      const desglose = Object.entries(info.por_operacion)
+        .map(([op, h]) => `${op}: ${fmtHoras(h)}h`)
+        .join(' · ');
+      return `<tr><td>${proyecto}</td><td>${fmtHoras(info.horas_hombre)} h</td><td class="hint">${desglose || '—'}</td></tr>`;
+    }).join('');
+}
+
+function tickCronometros() {
+  document.querySelectorAll('.cronometro[data-live="1"]').forEach(el => {
+    const min = Number(el.dataset.min) + (1 / 60);
+    el.dataset.min = min;
+    el.textContent = formatHMSFromMinutes(min);
+  });
+}
+
+async function refresh() {
+  try {
+    const d = await Api.get('dashboard');
+    if (!d.ok) throw new Error(d.error || 'Error al consultar el dashboard');
+    lastData = d;
+    renderKpis(d);
+    renderOperarios(d);
+    renderBars('operaciones-bars', d.por_operacion);
+    renderBars('operarios-bars', Object.fromEntries(Object.entries(d.por_operario).map(([k, v]) => [k, v.horas_hombre])));
+    renderProyectos(d);
+    document.getElementById('last-update').textContent = 'actualizado ' + new Date().toLocaleTimeString('es-AR');
+  } catch (err) {
+    document.getElementById('last-update').textContent = 'error: ' + err.message;
+  }
+}
+
+(function init() {
+  if (!Api.isConfigured()) {
+    document.getElementById('config-warning').style.display = 'block';
+    return;
+  }
+  refresh();
+  setInterval(refresh, APP_CONFIG.DASHBOARD_POLL_MS);
+  tickInterval = setInterval(tickCronometros, 1000);
+})();
+</script>
+</body>
+</html>

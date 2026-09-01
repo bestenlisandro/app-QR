@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14171a">
+<title>Generador de QR — Hoja de Ruta</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  main { max-width: 900px; }
+  .print-header { display: none; }
+  @media print {
+    .print-header { display: block; text-align: center; margin-bottom: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar no-print">
+  <h1>🖨️ Generador de QR — Hoja de Ruta</h1>
+</div>
+
+<main>
+
+  <p id="config-warning" class="hint no-print" style="display:none;color:#e74c3c;text-align:center;">
+    ⚠️ Falta configurar la URL del Web App en <code>webapp/config.js</code>.
+  </p>
+
+  <div class="card no-print">
+    <h2>1. Elegí el proyecto</h2>
+    <p class="hint">Los proyectos deben estar cargados en la pestaña <strong>Proyectos</strong> de la planilla (los carga Daniel).</p>
+    <div class="field">
+      <label>Proyecto activo</label>
+      <select id="sel-proyecto"></select>
+    </div>
+    <p class="hint">¿No aparece tu proyecto? Podés generar los QR igual completando manualmente:</p>
+    <div style="display:flex; gap:10px;">
+      <div class="field" style="flex:1;">
+        <label>ID de proyecto</label>
+        <input type="text" id="manual-id" placeholder="Ej: PRJ-105">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Cliente</label>
+        <input type="text" id="manual-cliente" placeholder="Ej: Juan Pérez">
+      </div>
+    </div>
+    <button class="btn" id="btn-generar">Generar los 7 códigos QR</button>
+  </div>
+
+  <div class="print-header">
+    <h2 id="print-title"></h2>
+  </div>
+
+  <div class="card no-print" id="acciones-card" style="display:none;">
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btn-imprimir">🖨️ Imprimir / Guardar PDF</button>
+      <button class="btn btn-secondary" id="btn-volver">Generar otro proyecto</button>
+    </div>
+  </div>
+
+  <div class="print-grid" id="qr-grid"></div>
+
+</main>
+
+<footer class="foot no-print">Ver docs/03-GENERAR-QR-HOJAS-DE-RUTA.md para el formato recomendado de impresión.</footer>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+async function cargarProyectos() {
+  const sel = document.getElementById('sel-proyecto');
+  sel.innerHTML = '<option value="">— Ingresar manualmente abajo —</option>';
+  try {
+    const res = await Api.get('proyectosActivos');
+    (res.proyectos || []).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id_proyecto;
+      opt.dataset.cliente = p.cliente || '';
+      opt.textContent = `${p.id_proyecto} — ${p.cliente || 's/cliente'} (${p.tipo_servicio || ''})`;
+      sel.appendChild(opt);
+    });
+  } catch (err) {
+    console.warn('No se pudieron cargar proyectos activos:', err.message);
+  }
+}
+
+function generarQRs() {
+  const sel = document.getElementById('sel-proyecto');
+  let proyectoId, cliente;
+
+  if (sel.value) {
+    proyectoId = sel.value;
+    cliente = sel.selectedOptions[0].dataset.cliente || '';
+  } else {
+    proyectoId = document.getElementById('manual-id').value.trim();
+    cliente = document.getElementById('manual-cliente').value.trim();
+  }
+
+  if (!proyectoId) {
+    alert('Ingresá o seleccioná un ID de proyecto.');
+    return;
+  }
+
+  const grid = document.getElementById('qr-grid');
+  grid.innerHTML = '';
+  document.getElementById('print-title').textContent = `Hoja de Ruta — ${proyectoId}${cliente ? ' — ' + cliente : ''}`;
+  document.getElementById('acciones-card').style.display = 'block';
+
+  APP_CONFIG.OPERACIONES.forEach(op => {
+    const payload = JSON.stringify({
+      proyecto_id: proyectoId,
+      operacion_id: op.id,
+      operacion_nombre: op.nombre
+    });
+
+    const card = document.createElement('div');
+    card.className = 'print-card';
+    card.innerHTML = `
+      <div id="qr-${op.id}"></div>
+      <div class="op-nombre">${op.id} · ${op.nombre}</div>
+      <div class="meta">Proyecto: ${proyectoId}${cliente ? ' · ' + cliente : ''}</div>
+    `;
+    grid.appendChild(card);
+
+    new QRCode(document.getElementById('qr-' + op.id), {
+      text: payload,
+      width: 200,
+      height: 200,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+
+  grid.scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('btn-generar').onclick = generarQRs;
+document.getElementById('btn-imprimir').onclick = () => window.print();
+document.getElementById('btn-volver').onclick = () => {
+  document.getElementById('qr-grid').innerHTML = '';
+  document.getElementById('acciones-card').style.display = 'none';
+};
+
+(function init() {
+  if (!Api.isConfigured()) {
+    document.getElementById('config-warning').style.display = 'block';
+  }
+  cargarProyectos();
+})();
+</script>
+</body>
+</html>
