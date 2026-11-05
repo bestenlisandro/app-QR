@@ -1,134 +1,79 @@
-# Estructura de la Base de Datos (Google Sheets)
+# Estructura de la planilla (Google Sheets)
 
-La planilla de Google Sheets actúa como base de datos del sistema. Debe tener
-**3 pestañas** con estos nombres exactos (respetar mayúsculas y guion bajo):
+Planilla: **Control de Produccion Taller**. La función `setupHojas()` de
+`apps-script/Code.gs` crea todas las pestañas con sus encabezados. Si una
+pestaña ya existe con datos, no la pisa.
 
-```
-Proyectos
-Registro_Tiempos
-Dashboard_Resumen
-```
-
-No hace falta crearlas a mano: el script `apps-script/Code.gs` incluye la
-función `setupHojas()` que las crea (o repara) automáticamente con los
-encabezados correctos. Ver `docs/02-GUIA-DESPLIEGUE.md`.
+Todo lo que está en las pestañas **Operarios, Operaciones, Proyectos y
+Config** se puede editar directo en la planilla: las pantallas lo leen solas
+(la PC del taller recarga la configuración cada 5 minutos).
 
 ---
 
-## 1. Pestaña `Proyectos`
+## `Registro_Tiempos` — un renglón por cada tramo de trabajo
 
-Uno de los administradores (Daniel) carga acá cada proyecto/orden antes de
-que Producción (Maximiliano) genere los QR de la hoja de ruta.
+| Col | Campo | Descripción |
+|---|---|---|
+| A | ID | Identificador interno del registro |
+| B | Fecha | Día en que empezó |
+| C | Operario | Mariano / Emiliano / Gonzalo |
+| D | Proyecto | ID del proyecto, `GENERAL` (tarea general) o vacío (pausas) |
+| E | Cliente | Se completa solo desde `Proyectos` |
+| F | Cod_Operacion | Código (CORTE, ARMADO, ALMUERZO…) |
+| G | Operacion | Nombre de la operación |
+| H | Tipo | `Productiva` (de un proyecto), `General` o `Pausa` |
+| I | Inicio | Fecha y hora de inicio |
+| J | Fin | Fecha y hora de fin (vacío mientras está abierta) |
+| K | Minutos | Duración en minutos |
+| L | Horas | Duración en horas decimales (1,5 = 1 h 30 min) |
+| M | Estado | `Abierta`, `Cerrada`, `Cierre automático` o `Corregida` |
+| N | Observacion | Marcas a revisar: "Sin proyecto – revisar", "Quedó abierta – revisar hora de fin", "Proyecto no cargado en la lista – revisar" |
+| O | Origen | `PC`, `Celular` o `Corrección` |
+| P | Editado_por | Quién corrigió y cuándo |
 
-| Columna                 | Tipo   | Descripción                                                        |
-|--------------------------|--------|---------------------------------------------------------------------|
-| `ID_Proyecto`            | Texto  | Identificador único, ej. `PRJ-104`. Va codificado en los QR.        |
-| `Cliente`                | Texto  | Nombre del cliente.                                                  |
-| `Tipo_Servicio`          | Texto  | `Interno` (corte y canteado propio) o `Servicio Externo`.           |
-| `Estado`                 | Texto  | `Activo`, `Pausado`, `Finalizado` o `Cerrado`.                       |
-| `Fecha_Inicio`           | Fecha  | Fecha de alta del proyecto.                                         |
-| `Fecha_Entrega_Estimada` | Fecha  | Opcional.                                                            |
-| `Observaciones`          | Texto  | Notas libres.                                                       |
+Se puede editar a mano, pero es mejor corregir desde el dashboard
+(pestaña **Registros y correcciones**): recalcula minutos y horas y deja
+registrado quién corrigió.
 
-Solo los proyectos con `Estado` distinto de `Finalizado`/`Cerrado` aparecen
-como "activos" en el generador de QR y en los combos de la app.
+## `Proyectos`
 
----
+| Columna | Descripción |
+|---|---|
+| ID_Proyecto | Solo letras, números y guiones (ej. `104`, `B-104`). Va en el QR. |
+| Cliente | Nombre del cliente |
+| Descripcion | Opcional (ej. "Placard dormitorio") |
+| Estado | Si dice `Terminado`, deja de aparecer en el generador de QR. Sus horas siguen en los reportes. |
+| Fecha_Inicio / Fecha_Entrega | Opcionales |
 
-## 2. Pestaña `Registro_Tiempos`
+## `Operarios`
 
-Es el corazón del sistema: **una fila por cada operación fichada** (inicio →
-fin) de cada operario. La escribe exclusivamente el backend (Apps Script),
-nunca a mano, para no romper la concurrencia.
+| Columna | Descripción |
+|---|---|
+| Nombre | Como aparece en pantallas y reportes |
+| Prefijo_Pistola | Lo que la pistola de esa persona agrega antes de cada lectura (por defecto `M1`, `E2`, `G3`). Ver docs/03. |
+| Activo | `SI` / `NO` |
 
-| Columna                    | Tipo    | Descripción                                                                 |
-|------------------------------|---------|-------------------------------------------------------------------------------|
-| `ID_Registro`                | Texto   | UUID único generado al iniciar la tarea.                                     |
-| `ID_Proyecto`                | Texto   | FK a `Proyectos.ID_Proyecto`.                                                |
-| `Operario`                   | Texto   | `Mariano`, `Emiliano` o `Gonzalo`.                                            |
-| `Operacion_ID`               | Texto   | `OP-01` … `OP-07` (ver tabla de operaciones abajo).                          |
-| `Operacion`                  | Texto   | Nombre legible de la operación.                                              |
-| `Fecha`                      | Texto   | `yyyy-MM-dd`, fecha de inicio.                                              |
-| `Hora_Inicio`                | Fecha/Hora | Timestamp exacto de INICIAR.                                              |
-| `Hora_Fin`                   | Fecha/Hora | Timestamp exacto de FINALIZAR (vacío mientras está en curso).             |
-| `Duracion_Minutos`           | Número  | Minutos netos de trabajo (excluye pausas). Se calcula al finalizar.          |
-| `Horas_Hombre`               | Número  | `Duracion_Minutos / 60`.                                                     |
-| `Tiempo_Pausado_Minutos`     | Número  | Minutos acumulados en pausa.                                                 |
-| `Pausa_Inicio`                | Fecha/Hora | Timestamp del último PAUSAR (vacío si no está pausado).                   |
-| `Estado`                     | Texto   | `En Curso`, `Pausado` o `Finalizado`.                                        |
-| `Ultima_Actualizacion`       | Fecha/Hora | Timestamp de la última acción sobre la fila.                             |
+## `Operaciones`
 
-### Las 7 operaciones (fijas en el sistema)
+| Columna | Descripción |
+|---|---|
+| Codigo | Va en el QR como `OP-<Codigo>`. Si se cambia, hay que reimprimir ese cartel. |
+| Nombre | Texto que se ve en pantallas y reportes |
+| Tipo | `PROYECTO` (requiere proyecto), `OPCIONAL` (proyecto o GENERAL), `PAUSA`, `FIN` |
+| Orden | Orden de las columnas en los reportes |
+| Activa | `SI` / `NO` |
 
-| ID     | Operación                                   | Recurso típico              |
-|--------|-----------------------------------------------|------------------------------|
-| OP-01  | Descarga de materiales                        | —                            |
-| OP-02  | Orden / Clasificación                         | —                            |
-| OP-03  | Corte (Escuadradora)                          | Escuadradora con incisor     |
-| OP-04  | Pegado de cantos (Pegadora de PVC)            | Pegadora de cantos           |
-| OP-05  | Procesado / Perforado (Perforadora múltiple)  | Perforadora múltiple         |
-| OP-06  | Armado (Bancos de armado)                     | Banco de armado 1 / 2        |
-| OP-07  | Carga (Logística / Despacho)                  | —                            |
+## `Config`
 
-### Control de concurrencia
+| Clave | Por defecto | Descripción |
+|---|---|---|
+| ADMIN_PIN | 1234 | PIN de correcciones. **Cambiarlo.** |
+| HORA_CIERRE | 19 | Hora del cierre automático. Si se cambia, volver a ejecutar `setupHojas()` para reprogramarlo. |
+| VENTANA_PROYECTO_MIN | 15 | Minutos que vale el QR de proyecto antes de escanear la operación. |
 
-Antes de crear una fila nueva, el backend verifica que el operario **no**
-tenga ya una fila con `Estado = En Curso` o `Pausado`. Si la tiene, rechaza
-el inicio y devuelve la tarea activa para que la app la muestre. Así se
-garantiza en el servidor (no solo en el frontend) que un operario nunca
-tenga dos tareas simultáneas.
+## `Reporte`
 
----
-
-## 3. Pestaña `Dashboard_Resumen`
-
-Se genera y recalcula automáticamente (menú **Control de Producción → Recalcular
-Dashboard**, o al correr `setupHojas()`) con fórmulas `QUERY` sobre
-`Registro_Tiempos`. Sirve como respaldo consultable directamente en la
-planilla, además del dashboard web en tiempo real (`webapp/dashboard.html`).
-
-Secciones (todas se recalculan solas, no editar a mano):
-
-- **A1: Horas-Hombre por Proyecto**
-  ```
-  =QUERY(Registro_Tiempos!A2:N,"select B, sum(J) where B <> '' group by B label sum(J) 'Horas Hombre'",0)
-  ```
-- **D1: Horas-Hombre por Operación** (las 7 operaciones)
-  ```
-  =QUERY(Registro_Tiempos!A2:N,"select E, sum(J) where E <> '' group by E label sum(J) 'Horas Hombre'",0)
-  ```
-- **G1: Horas-Hombre por Operario** (Mariano / Emiliano / Gonzalo)
-  ```
-  =QUERY(Registro_Tiempos!A2:N,"select C, sum(J) where C <> '' group by C label sum(J) 'Horas Hombre'",0)
-  ```
-- **J1: Desglose Operario × Operación (tabla pivote)**
-  ```
-  =QUERY(Registro_Tiempos!A2:N,"select C, sum(J) where C <> '' group by C pivot E",0)
-  ```
-
-> Estas fórmulas solo suman **tareas finalizadas** (tienen `Horas_Hombre`
-> cargado). El dashboard web, en cambio, además muestra en vivo las tareas
-> `En Curso` / `Pausado` con su cronómetro corriendo, porque consulta el
-> backend cada pocos segundos en lugar de depender del recálculo de fórmulas.
-
----
-
-## Diagrama de flujo de datos
-
-```
-[Operario en tablet]
-   → escanea QR (proyecto + operación)
-   → INICIAR / PAUSAR / REANUDAR / FINALIZAR
-        │  (HTTP GET/POST, JSON)
-        ▼
-[Google Apps Script - Code.gs (Web App)]
-        │  (SpreadsheetApp + LockService)
-        ▼
-[Google Sheets]
-   ├─ Proyectos            (maestro, lo carga Daniel)
-   ├─ Registro_Tiempos     (fichadas, escribe el backend)
-   └─ Dashboard_Resumen    (fórmulas QUERY, se recalculan solas)
-        │
-        ▼
-[dashboard.html] → poll cada 5-8s → gráficos y tarjetas en tiempo real
-```
+Se cambian las fechas amarillas (B1 desde, B2 hasta) y se recalculan tres
+tablas en horas: operario × operación, proyecto × operación y día ×
+operario. El dashboard tiene los mismos datos con porcentajes y descarga a
+Excel.

@@ -1,22 +1,17 @@
-// Configuración compartida por index.html, dashboard.html y generador-qr.html
+// Configuración compartida por todas las pantallas.
 //
-// 1. Desplegar apps-script/Code.gs como Web App (ver docs/02-GUIA-DESPLIEGUE.md).
-// 2. Pegar acá la URL que termina en /exec.
+// Operarios, prefijos de pistola, operaciones y proyectos NO se cargan acá:
+// se editan en la planilla de Google Sheets (pestañas Operarios, Operaciones,
+// Proyectos y Config) y las pantallas los leen solas.
+//
+// Lo único que va acá es la URL del backend (Apps Script publicado como
+// Aplicación web, termina en /exec). Ver docs/02-GUIA-DESPLIEGUE.md.
 const APP_CONFIG = {
+  // URL de la implementación existente. Si al pegar el Code.gs nuevo se edita
+  // ESA implementación (Administrar implementaciones > editar > Nueva versión),
+  // la URL no cambia. Si se crea una implementación nueva, pegar acá la nueva.
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxBkIEn9GGh8yRL4OUiMfOTZHeZo4IaHU4yC_ub1jqBCSdOtFkQbYM3bNRiUi_sfhtfFQ/exec',
 
-  OPERARIOS: ['Mariano', 'Emiliano', 'Gonzalo'],
-
-  OPERACIONES: [
-    { id: 'OP-01', nombre: 'Descarga de materiales' },
-    { id: 'OP-02', nombre: 'Orden / Clasificación' },
-    { id: 'OP-03', nombre: 'Corte (Escuadradora)' },
-    { id: 'OP-04', nombre: 'Pegado de cantos (Pegadora PVC)' },
-    { id: 'OP-05', nombre: 'Procesado / Perforado (Perforadora múltiple)' },
-    { id: 'OP-06', nombre: 'Armado (Bancos de armado)' },
-    { id: 'OP-07', nombre: 'Carga (Logística / Despacho)' }
-  ],
-
-  // Frecuencia de refresco del dashboard en tiempo real (ms)
-  DASHBOARD_POLL_MS: 6000
+  // Cada cuántos segundos se refresca el estado en pantalla
+  REFRESCO_SEG: 8
 };

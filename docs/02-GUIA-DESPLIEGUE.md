@@ -1,143 +1,97 @@
-# Guía de Despliegue y Pruebas
+# Guía de instalación
 
-Tiempo estimado: 20-30 minutos. No requiere tarjeta de crédito ni servicios
-pagos: todo corre sobre Google Workspace/Google gratuito + GitHub Pages.
+Tiempo: 20–30 minutos. Sin costos: Google Sheets + Apps Script + GitHub Pages.
 
-## Requisitos
+## FASE 1 — Backend en la planilla
 
-- Cuenta de Google (Workspace o Gmail normal).
-- Un repositorio de GitHub (este mismo) con acceso a **GitHub Pages**.
-- Tablets o celulares en planta con cámara y navegador moderno (Chrome/Safari).
+1. Abrí la planilla **Control de Produccion Taller** en Google Drive.
+2. Menú **Extensiones → Apps Script**.
+3. Si ya hay código en `Code.gs`, borralo entero. Pegá el contenido completo
+   de [`apps-script/Code.gs`](../apps-script/Code.gs). Guardá (`Ctrl+S`).
+4. Arriba, en la lista de funciones, elegí **`setupHojas`** y tocá
+   **Ejecutar**. La primera vez Google pide permisos: *Revisar permisos →
+   tu cuenta → Avanzado → Ir a (nombre del proyecto) → Permitir*.
+5. Volvé a la planilla y recargala. Tienen que aparecer las pestañas
+   `Operaciones`, `Operarios`, `Proyectos`, `Config`, `Registro_Tiempos` y
+   `Reporte`, y un menú **Control de Producción**.
+6. En la pestaña **Config**, cambiá el **ADMIN_PIN** (el `1234` de fábrica).
+7. En **Proyectos**, cargá los trabajos en curso (podés borrar la fila de ejemplo).
 
----
+## FASE 2 — Publicar el backend
 
-## FASE 1 — Crear la planilla y el backend (Google Apps Script)
+En el editor de Apps Script:
 
-1. Andá a [sheets.google.com](https://sheets.google.com) y creá una planilla
-   nueva. Nombrala, por ejemplo, **"Control de Producción — Taller"**.
-2. Menú **Extensiones → Apps Script**. Se abre el editor.
-3. Borrá el contenido de `Code.gs` que aparece por defecto y pegá el
-   contenido completo de [`apps-script/Code.gs`](../apps-script/Code.gs) de
-   este repositorio.
-4. Guardá el proyecto (ícono de disquete o `Ctrl+S`). Ponele un nombre, ej.
-   "Backend Control QR".
-5. En la barra de funciones (arriba, al lado del ícono ▶), elegí la función
-   `setupHojas` y hacé clic en **Ejecutar**.
-   - La primera vez Google va a pedir autorización: **Revisar permisos →
-     elegir tu cuenta → Avanzado → Ir a "Backend Control QR" (no seguro) →
-     Permitir**. Es tu propio script, es seguro autorizarlo.
-6. Volvé a la planilla y refrescá la página. Deberías ver:
-   - Un menú nuevo **"Control de Producción"** en la barra de menús.
-   - 3 pestañas: `Proyectos`, `Registro_Tiempos`, `Dashboard_Resumen`.
-7. Cargá al menos un proyecto real en la pestaña `Proyectos` (columna
-   `ID_Proyecto`, `Cliente`, `Tipo_Servicio`, `Estado = Activo`, `Fecha_Inicio`).
+- **Si ya había una implementación** (Implementar → Administrar
+  implementaciones muestra una): tocá el lápiz ✏️, en *Versión* elegí
+  **Nueva versión** e Implementar. La URL no cambia y `webapp/config.js` ya
+  la tiene.
+- **Si no había ninguna:** Implementar → **Nueva implementación** → tipo
+  **Aplicación web** → *Ejecutar como:* **Yo** · *Quién tiene acceso:*
+  **Cualquier usuario** → Implementar. Copiá la URL que termina en `/exec`
+  y pegala en `webapp/config.js` (`APPS_SCRIPT_URL`).
 
-### Publicar el backend como Web App
+> Cada vez que se cambie `Code.gs`, hay que hacer **Nueva versión** en la
+> implementación; si no, sigue corriendo la versión anterior.
+>
+> "Cualquier usuario" significa que quien tenga la URL puede fichar o ver
+> los datos. Para uso interno del taller está bien; no la publiques afuera.
+> Las correcciones igual piden PIN.
 
-1. En el editor de Apps Script: **Implementar → Nueva implementación**.
-2. Tipo: **Aplicación web**.
-3. Configuración:
-   - **Ejecutar como:** Yo (tu cuenta).
-   - **Quién tiene acceso:** *Cualquier usuario* (necesario para que la
-     tablet del taller pueda escribir sin iniciar sesión de Google). Si tu
-     organización usa Google Workspace y preferís restringirlo, podés elegir
-     *Cualquier usuario de \[tu dominio\]* — pero entonces cada tablet deberá
-     tener la sesión de Google iniciada.
-4. Hacé clic en **Implementar**. Copiá la **URL de la aplicación web**
-   (termina en `/exec`).
-5. Cada vez que modifiques `Code.gs`, tenés que crear una **nueva versión**
-   de la implementación (Implementar → Administrar implementaciones → lápiz
-   ✏️ → Nueva versión → Implementar) para que los cambios se reflejen en la
-   URL ya publicada.
+## FASE 3 — Publicar las pantallas (GitHub Pages)
 
-> 🔒 **Nota de seguridad:** con acceso "Cualquier usuario", cualquiera que
-> tenga la URL puede fichar tiempos. Para un taller interno esto suele ser
-> aceptable, pero no publiques la URL fuera del equipo. Si necesitás más
-> control, se puede agregar una clave simple (`?token=...`) validada en
-> `doGet`/`doPost` — pedímelo y lo agrego.
+1. En GitHub, repositorio `app-QR` → **Settings → Pages**.
+2. *Source:* **Deploy from a branch** · rama **main** · carpeta **/ (root)** → Save.
+3. En 1–2 minutos quedan en:
+   - PC del taller: `https://bestenlisandro.github.io/app-QR/webapp/estacion.html`
+   - Celular del operario: `https://bestenlisandro.github.io/app-QR/webapp/index.html`
+   - Dashboard: `https://bestenlisandro.github.io/app-QR/webapp/dashboard.html`
+   - Generador de QR: `https://bestenlisandro.github.io/app-QR/webapp/generador-qr.html`
 
----
+Para que en los celulares quede como app: Chrome → menú ⋮ → **Agregar a
+pantalla de inicio**.
 
-## FASE 2 — Configurar el frontend
+## FASE 4 — PC compartida con las 3 pistolas
 
-1. Abrí [`webapp/config.js`](../webapp/config.js) en este repositorio.
-2. Reemplazá el valor de `APPS_SCRIPT_URL` por la URL `/exec` que copiaste
-   en el paso anterior.
-3. Guardá y subí el cambio (commit + push) a la rama del proyecto.
+1. Conectá las 3 bases/receptores de las pistolas a la PC.
+2. **Configurá el prefijo de cada pistola** (ver
+   [`03-GENERAR-QR-HOJAS-DE-RUTA.md`](./03-GENERAR-QR-HOJAS-DE-RUTA.md)).
+3. Abrí `estacion.html` en Chrome y poné pantalla completa (`F11`).
+4. Dejá la ventana **siempre al frente y activa**: si alguien hace clic en
+   otro programa, las pistolas escriben ahí. La pantalla lo avisa con una
+   franja roja "La pantalla no está recibiendo las lecturas".
+5. En Windows: Configuración → Sistema → Energía → que la pantalla y la PC
+   **no se suspendan nunca** en horario de trabajo.
+6. Recomendado: que Chrome abra `estacion.html` al iniciar (Configuración
+   de Chrome → Al iniciar → Abrir una página específica).
 
----
+## FASE 5 — Imprimir QR
 
-## FASE 3 — Publicar el frontend (GitHub Pages)
+Ver [`03-GENERAR-QR-HOJAS-DE-RUTA.md`](./03-GENERAR-QR-HOJAS-DE-RUTA.md).
 
-1. En GitHub, andá a **Settings → Pages** del repositorio.
-2. En **Source**, elegí **Deploy from a branch**.
-3. Rama: la rama principal del proyecto (o la rama de esta tarea, si todavía
-   no se mergeó). Carpeta: **/ (root)**.
-4. Guardar. GitHub te va a dar una URL del tipo:
-   ```
-   https://<tu-usuario>.github.io/<tu-repo>/
-   ```
-5. La app queda accesible en:
-   - App del operario: `.../webapp/index.html`
-   - Dashboard en tiempo real: `.../webapp/dashboard.html`
-   - Generador de QR: `.../webapp/generador-qr.html`
-6. Agregá esas URLs como accesos directos en la pantalla de inicio de las
-   tablets/celulares del taller (Chrome → menú ⋮ → "Agregar a pantalla de
-   inicio"), así queda como una app.
+## FASE 6 — Prueba completa (10 minutos)
 
-> GitHub Pages sirve todo por **HTTPS**, requisito indispensable para que el
-> navegador permita usar la cámara (`getUserMedia`) en el escáner QR.
+1. En la PC, con la estación abierta, la pistola de Mariano lee el QR de
+   un proyecto → su tarjeta muestra "Proyecto escaneado … falta la operación".
+2. Lee **Corte** → tarjeta verde "Corte · proyecto", el cronómetro corre.
+3. Lee **Corte** de nuevo → "terminó Corte (x min)".
+4. Lee **Armado** sin escanear proyecto → alerta (tres pitidos) "SIN PROYECTO".
+5. Lee **Almuerzo** → se cierra Armado y queda en pausa (tarjeta amarilla).
+6. En el dashboard, pestaña **Ahora**: aparecen las tres tarjetas y lo que
+   hizo cada uno hoy.
+7. Pestaña **Registros y correcciones** → elegí quién sos, poné el PIN →
+   tildá "Solo abiertos / a revisar" → **Editar** el Armado y cargale el
+   proyecto → Guardar. La marca de revisar desaparece.
+8. En la planilla, `Registro_Tiempos` tiene una fila por cada tramo.
+9. Repetí con las pistolas de Emiliano y Gonzalo.
 
----
+## Problemas comunes
 
-## FASE 4 — Generar e imprimir los QR (Maximiliano)
-
-1. Abrí `webapp/generador-qr.html`.
-2. Elegí el proyecto (se lista automáticamente desde la pestaña `Proyectos`).
-3. Hacé clic en **"Generar los 7 códigos QR"**.
-4. Imprimí (botón **Imprimir / Guardar PDF**) y pegá cada QR en la sección
-   correspondiente de la hoja de ruta física.
-5. Ver formato recomendado en
-   [`docs/03-GENERAR-QR-HOJAS-DE-RUTA.md`](./03-GENERAR-QR-HOJAS-DE-RUTA.md).
-
----
-
-## FASE 5 — Prueba end-to-end
-
-1. Abrí `webapp/index.html` en una tablet o celular.
-2. Elegí un operario (ej. Mariano).
-3. Tocá **"ESCANEAR QR"**, dale permiso de cámara, y escaneá un QR de
-   "Corte" del proyecto cargado.
-4. Confirmá y tocá **"INICIAR OPERACIÓN"**. El cronómetro debe empezar a
-   correr.
-5. Probá **PAUSAR** → esperá unos segundos → **REANUDAR** → el cronómetro
-   debe seguir sumando desde donde iba (sin contar la pausa).
-6. Tocá **FINALIZAR**, confirmá. Debe volver a la pantalla de inicio.
-7. Verificá en la planilla, pestaña `Registro_Tiempos`: debe aparecer una
-   fila nueva con `Estado = Finalizado`, `Hora_Inicio`, `Hora_Fin`,
-   `Duracion_Minutos` y `Horas_Hombre` cargados.
-8. Abrí `webapp/dashboard.html` en otra pestaña/pantalla (por ejemplo, un
-   monitor en la oficina de Maximiliano) y confirmá que los totales se
-   actualizan solos cada pocos segundos, y que al iniciar una tarea nueva
-   aparece el cronómetro corriendo en tiempo real en la tarjeta del operario.
-9. Probá el control de concurrencia: con el mismo operario, intentá escanear
-   e iniciar una segunda tarea sin haber finalizado la primera. La app debe
-   avisar "ya tiene una tarea activa" y mostrar directamente el cronómetro
-   de la tarea en curso.
-10. Recargá la página (`F5`) en medio de una tarea en curso: al reabrir y
-    elegir el mismo operario, el cronómetro debe reaparecer solo, tomando el
-    tiempo real transcurrido (el estado vive en la planilla, no en el
-    celular).
-
----
-
-## Resolución de problemas comunes
-
-| Síntoma | Causa probable | Solución |
-|---|---|---|
-| "Falta configurar APPS_SCRIPT_URL" | No se editó `config.js` | Pegar la URL `/exec` real |
-| La cámara no abre | Sitio no es HTTPS, o se negó el permiso | Usar la URL de GitHub Pages (HTTPS); revisar permisos del navegador |
-| `TypeError: Failed to fetch` | URL de Apps Script mal copiada, o implementación no publicada como "Aplicación web" | Revisar Implementar → Administrar implementaciones |
-| El dashboard no actualiza | El backend cambió pero no se creó nueva versión de la implementación | Implementar → Administrar implementaciones → Nueva versión |
-| "Ya tiene una tarea activa" inesperado | Un operario quedó con una tarea sin finalizar (ej. se cerró la app) | Buscar la fila en `Registro_Tiempos` con `Estado = En Curso/Pausado` y finalizarla manualmente, o desde la app entrando con ese operario |
-| Los tiempos no coinciden con el reloj de pared | Zona horaria del proyecto de Apps Script mal configurada | En el editor de Apps Script: ⚙️ Configuración del proyecto → Zona horaria |
+| Síntoma | Solución |
+|---|---|
+| "No reconozco la pistola (prefijo)" | La pistola no tiene prefijo, o el de la pestaña Operarios no coincide. Usá "Probar sin pistola" en la estación para ver qué llega. |
+| La lectura sale con letras cambiadas o símbolos raros | Distribución de teclado de la pistola distinta a la de Windows. Guiones y símbolos se ignoran solos; si cambian letras, configurá la pistola en el idioma de teclado de la PC (código del manual: "Keyboard language"). |
+| No pasa nada al escanear | La ventana de la estación no está activa (franja roja). Hacé clic en ella. |
+| "Acción desconocida: config" | La implementación sigue con el código viejo: hacé **Nueva versión** (Fase 2). |
+| "N lecturas sin enviar" | No hay internet en la PC; se mandan solas cuando vuelve. No cerrar el navegador mientras tanto. |
+| La cámara del celular no abre | Abrir desde la URL de GitHub Pages (https) y dar permiso de cámara a Chrome. |
+| Horas corridas | En Apps Script: ⚙️ Configuración del proyecto → Zona horaria **(GMT-03:00) Buenos Aires**. |

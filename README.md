@@ -1,106 +1,75 @@
-# Control de Producción por QR — Fábrica de Muebles de Melamina
+# Control de Producción por QR — Besten
 
-Aplicación web (mobile/tablet-first) para medir en tiempo real las
-Horas-Hombre de cada operario en las 7 operaciones del taller, mediante
-escaneo de códigos QR en la hoja de ruta. Sin servidores propios: el backend
-es Google Apps Script y la base de datos es Google Sheets.
+Mide cuánto tiempo trabaja cada operario en cada operación y en cada proyecto
+del taller de amoblamientos de melamina. Cada operario tiene su pistola
+lectora (o su celular): escanea el QR del **proyecto**, después el de la
+**operación**, y el tiempo empieza a correr. Para terminar escanea de nuevo
+la misma operación. Todo queda en Google Sheets y se ve en vivo en un
+dashboard desde cualquier celular o PC.
 
-## Equipo y roles
+## Qué se mide
 
-| Persona | Rol |
-|---|---|
-| Daniel | Ventas / Administración — crea proyectos y órdenes |
-| Lisandro | Compras — insumos y materiales |
-| Maximiliano | Producción — planos, hojas de ruta y generación de QR |
-| Mariano, Emiliano, Gonzalo | Operarios de planta — fichan tiempos con la app |
+- **Operarios:** Mariano, Emiliano, Gonzalo (se editan en la planilla).
+- **Operaciones:** Descarga de materiales · Acomodamiento · Corte · Pegado de
+  cantos · Procesado con múltiple · Procesado sin múltiple · Ranurado ·
+  Armado · Limpieza · Embalaje · Carga.
+- **Pausas:** Descanso · Almuerzo · Pausa. **Fin de jornada** cierra todo.
+- Descarga, Acomodamiento y Limpieza pueden ser de un proyecto o **tareas
+  generales** del taller (si no se escaneó proyecto, van a `GENERAL`).
 
-## Las 7 operaciones medidas
+## Pantallas
 
-1. Descarga de materiales
-2. Orden / Clasificación
-3. Corte (Escuadradora)
-4. Pegado de cantos (Pegadora de PVC)
-5. Procesado / Perforado (Perforadora múltiple)
-6. Armado (Bancos de armado)
-7. Carga (Logística / Despacho)
+| Archivo | Para quién | Qué hace |
+|---|---|---|
+| `webapp/estacion.html` | PC compartida del taller | Recibe las 3 pistolas. Reconoce a cada operario por el **prefijo** de su pistola y muestra qué está haciendo cada uno. Si se corta internet, guarda las lecturas y las manda después. |
+| `webapp/index.html` | Celular del operario | Alternativa a la pistola: escanea con la cámara. |
+| `webapp/dashboard.html` | Maxi, Daniel, Lisandro | **Ahora** (qué hace cada uno y desde cuándo), **Reporte por período** (horas y % por operario, operación, proyecto y día; descarga a Excel) y **Correcciones** con PIN. |
+| `webapp/generador-qr.html` | Maxi | Imprime los carteles de operaciones (una vez) y los QR de cada proyecto. |
+
+## Cómo funciona un escaneo
+
+```
+Pistola M1 lee "PRY-104"   → Mariano tiene el proyecto 104 "en mano" (vale 15 min)
+Pistola M1 lee "OP-CORTE"  → empieza Corte · proyecto 104
+Pistola M1 lee "OP-CORTE"  → termina Corte (se guarda la duración)
+Pistola M1 lee "OP-ALMUERZO" → si tenía algo abierto, se cierra y empieza Almuerzo
+Pistola M1 lee "OP-FIN"    → fin de jornada: cierra lo que esté abierto
+```
+
+- Si escanea una operación nueva sin cerrar la anterior, la anterior se
+  cierra sola en ese momento.
+- Si una operación de proyecto (Corte, Armado, etc.) se escanea sin proyecto,
+  **se registra igual** marcada "Sin proyecto – revisar" y la PC hace un
+  sonido de alerta. Se completa después desde Correcciones.
+- A la hora de cierre (pestaña Config, por defecto 19 h) todo lo que quedó
+  abierto se cierra solo y queda marcado para revisar.
 
 ## Arquitectura
 
 ```
-┌─────────────────────┐     HTTPS (GET/POST JSON)     ┌──────────────────────┐
-│  Web App (frontend)  │ ─────────────────────────────▶ │  Google Apps Script  │
-│  webapp/*.html        │ ◀───────────────────────────── │  apps-script/Code.gs │
-│  (GitHub Pages)       │                                 │  (Web App)           │
-└─────────────────────┘                                 └──────────┬───────────┘
-     │  html5-qrcode (cámara)                                        │
-     │  polling cada 6s (dashboard)                                  ▼
-     ▼                                                     ┌──────────────────┐
-  Tablets/celulares                                        │   Google Sheets    │
-  en planta                                                │  Proyectos          │
-                                                             │  Registro_Tiempos  │
-                                                             │  Dashboard_Resumen │
-                                                             └──────────────────┘
+3 pistolas ──USB/base──▶ PC compartida (estacion.html) ─┐
+celulares (index.html) ─────────────────────────────────┼─HTTPS─▶ Google Apps Script ─▶ Google Sheets
+dashboard (cualquier celular/PC) ◀──────────────────────┘          (apps-script/Code.gs)
 ```
 
-## Estructura del repositorio
+Sin servidores propios ni costos: el frontend se publica con GitHub Pages y
+el backend es un Apps Script vinculado a la planilla.
+
+## Estructura
 
 ```
-app-QR/
-├── README.md                                  ← este archivo
-├── docs/
-│   ├── 01-ESTRUCTURA-GOOGLE-SHEETS.md          ← esquema de datos y fórmulas
-│   ├── 02-GUIA-DESPLIEGUE.md                   ← paso a paso de instalación
-│   └── 03-GENERAR-QR-HOJAS-DE-RUTA.md          ← formato de impresión de QR
-├── apps-script/
-│   └── Code.gs                                 ← backend (Apps Script)
-└── webapp/
-    ├── config.js                               ← ⚠️ acá va la URL del backend
-    ├── api.js                                  ← cliente HTTP compartido
-    ├── styles.css                               ← tema industrial alto contraste
-    ├── index.html                              ← app del operario (escáner + cronómetro)
-    ├── dashboard.html                          ← dashboard del taller en tiempo real
-    └── generador-qr.html                       ← generador/impresión de QR (Maximiliano)
+apps-script/Code.gs              backend (lógica de escaneo, reportes, correcciones)
+webapp/config.js                 URL del backend (lo único que hay que tocar en código)
+webapp/api.js                    conexión, cola sin internet, sonidos, formatos
+webapp/estacion.html             PC con las pistolas
+webapp/index.html                celular del operario
+webapp/dashboard.html            dashboard + reporte + correcciones
+webapp/generador-qr.html         impresión de QR
+docs/01-ESTRUCTURA-GOOGLE-SHEETS.md
+docs/02-GUIA-DESPLIEGUE.md       instalación paso a paso
+docs/03-GENERAR-QR-HOJAS-DE-RUTA.md  QR, pistolas y uso diario
 ```
 
-## Funcionalidades
+## Puesta en marcha
 
-- **App del operario:** selección táctil (Mariano / Emiliano / Gonzalo),
-  escaneo de QR con la cámara, botonera grande INICIAR / PAUSAR / FINALIZAR,
-  cronómetro en vivo, y control de concurrencia (no se puede iniciar una
-  tarea nueva sin cerrar la anterior — validado en el servidor, no solo en
-  el celular).
-- **Persistencia de sesión:** si se recarga la página o se cierra la app a
-  mitad de una tarea, al volver a elegir el mismo operario se restaura el
-  cronómetro exacto (el estado real vive en la planilla).
-- **Dashboard en tiempo real** (`dashboard.html`): KPIs generales del
-  taller, estado y cronómetro en vivo de cada operario, horas-hombre por
-  operación, por operario y por proyecto — todo actualizándose solo cada
-  pocos segundos.
-- **Generador de QR** (`generador-qr.html`): genera e imprime los 7 QR de
-  un proyecto para pegar en la hoja de ruta física.
-- **Google Sheets como base de datos:** editable directamente por Daniel
-  (proyectos) sin necesitar programación; `Dashboard_Resumen` trae fórmulas
-  `QUERY` listas para auditar o exportar.
-
-## Puesta en marcha rápida
-
-1. Leer y seguir **`docs/01-ESTRUCTURA-GOOGLE-SHEETS.md`** para entender el
-   modelo de datos.
-2. Seguir **`docs/02-GUIA-DESPLIEGUE.md`** paso a paso: crear la planilla,
-   publicar el backend, configurar `webapp/config.js` y publicar el
-   frontend (GitHub Pages).
-3. Usar **`docs/03-GENERAR-QR-HOJAS-DE-RUTA.md`** para imprimir los QR de
-   cada proyecto.
-
-## Notas de diseño
-
-- El frontend es HTML/CSS/JS puro (sin build ni frameworks) para que
-  cualquiera pueda editarlo directo en GitHub y publicarlo con GitHub Pages,
-  sin instalar Node ni nada localmente.
-- El "tiempo real" del dashboard es *polling* (consultas periódicas cada 6
-  segundos), no WebSockets — es la única opción compatible con Google Apps
-  Script como backend, y es más que suficiente para el ritmo de un taller.
-- Las 7 operaciones y los 3 operarios están definidos como configuración
-  (`webapp/config.js` en el frontend, y constantes al inicio de
-  `apps-script/Code.gs` en el backend). Si el equipo de planta cambia, se
-  edita en esos dos lugares.
+Seguir **`docs/02-GUIA-DESPLIEGUE.md`** (20–30 minutos).

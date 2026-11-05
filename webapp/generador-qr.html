@@ -1,151 +1,147 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#14171a">
-<title>Generador de QR — Hoja de Ruta</title>
+<title>Generador de QR</title>
 <link rel="stylesheet" href="styles.css">
 <style>
-  main { max-width: 900px; }
-  .print-header { display: none; }
+  .lista-proy { display: grid; gap: 6px; max-height: 300px; overflow: auto; padding: 4px; }
+  .lista-proy label { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: .95rem; margin: 0; padding: 6px 8px; border-radius: 8px; background: var(--panel-2); }
+  .lista-proy input { min-height: 0; }
+  #hojas { margin-top: 20px; }
+  .hoja { background: #fff; color: #000; margin: 0 auto 20px; width: 210mm; max-width: 100%; padding: 10mm; display: grid; gap: 6mm; box-sizing: border-box; }
+  .hoja.g6 { min-height: 297mm; }
+  .hoja.g6 { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 1fr); }
+  .g6 .etq { padding: 3mm; gap: 1.5mm; overflow: hidden; }
+  .g6 .etq .t1 { font-size: 15pt; }
+  .g6 .etq .t2 { font-size: 9pt; }
+  .hoja.g1 { grid-template-columns: 1fr; }
+  .etq { border: 1.5px dashed #999; border-radius: 4mm; padding: 5mm; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2mm; break-inside: avoid; }
+  .etq .qr img, .etq .qr canvas { display: block; margin: 0 auto; }
+  .etq .t1 { font-size: 20pt; font-weight: 800; line-height: 1.1; }
+  .etq .t2 { font-size: 11pt; color: #333; }
+  .etq .cod { font-family: monospace; font-size: 9pt; color: #666; }
+  .etq .tag { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 1mm 3mm; border-radius: 2mm; border: 1px solid #000; }
+  .g1 .etq { min-height: 260mm; border: none; }
+  .g1 .etq .t1 { font-size: 44pt; }
+  .g1 .etq .t2 { font-size: 16pt; }
   @media print {
-    .print-header { display: block; text-align: center; margin-bottom: 16px; }
+    @page { size: A4; margin: 0; }
+    .topbar, .controles { display: none !important; }
+    .wrap { padding: 0; max-width: none; }
+    .hoja { margin: 0; width: 210mm; height: 297mm; page-break-after: always; overflow: hidden; }
+    .hoja.g6 { height: 296mm; }
+    #hojas { margin: 0; }
   }
 </style>
 </head>
 <body>
-
-<div class="topbar no-print">
-  <h1>🖨️ Generador de QR — Hoja de Ruta</h1>
-</div>
-
-<main>
-
-  <p id="config-warning" class="hint no-print" style="display:none;color:#e74c3c;text-align:center;">
-    ⚠️ Falta configurar la URL del Web App en <code>webapp/config.js</code>.
-  </p>
-
-  <div class="card no-print">
-    <h2>1. Elegí el proyecto</h2>
-    <p class="hint">Los proyectos deben estar cargados en la pestaña <strong>Proyectos</strong> de la planilla (los carga Daniel).</p>
-    <div class="field">
-      <label>Proyecto activo</label>
-      <select id="sel-proyecto"></select>
-    </div>
-    <p class="hint">¿No aparece tu proyecto? Podés generar los QR igual completando manualmente:</p>
-    <div style="display:flex; gap:10px;">
-      <div class="field" style="flex:1;">
-        <label>ID de proyecto</label>
-        <input type="text" id="manual-id" placeholder="Ej: PRJ-105">
-      </div>
-      <div class="field" style="flex:1;">
-        <label>Cliente</label>
-        <input type="text" id="manual-cliente" placeholder="Ej: Juan Pérez">
+<header class="topbar">
+  <div><h1>Generador de códigos QR</h1><div class="sub">Operaciones y proyectos</div></div>
+  <span class="pill" id="estado-red"><span class="dot"></span> …</span>
+</header>
+<main class="wrap">
+  <div class="controles" style="display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px,1fr));">
+    <div class="card">
+      <h2>1 · QR de operaciones (carteles fijos)</h2>
+      <p class="muted small">Se imprimen una sola vez y se pegan en cada puesto. Incluye Descanso, Almuerzo, Pausa y Fin de jornada.</p>
+      <div class="row">
+        <button class="btn primary" id="btn-ops-grandes">Carteles grandes (1 por hoja)</button>
+        <button class="btn" id="btn-ops-chicos">Etiquetas (6 por hoja)</button>
       </div>
     </div>
-    <button class="btn" id="btn-generar">Generar los 7 códigos QR</button>
-  </div>
-
-  <div class="print-header">
-    <h2 id="print-title"></h2>
-  </div>
-
-  <div class="card no-print" id="acciones-card" style="display:none;">
-    <div class="btn-row">
-      <button class="btn btn-secondary" id="btn-imprimir">🖨️ Imprimir / Guardar PDF</button>
-      <button class="btn btn-secondary" id="btn-volver">Generar otro proyecto</button>
+    <div class="card">
+      <h2>2 · QR de proyectos</h2>
+      <p class="muted small">Uno por trabajo. Va pegado en la hoja de ruta / carpeta que viaja con el mueble. Los proyectos se cargan en la pestaña <b>Proyectos</b> de la planilla.</p>
+      <div class="lista-proy" id="lista-proy"><span class="muted">Cargando…</span></div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1"><label>O escribir un ID a mano</label><input id="proy-manual" placeholder="Ej: 104" style="width:100%"></div>
+        <button class="btn primary" id="btn-proy">Generar seleccionados</button>
+      </div>
     </div>
   </div>
-
-  <div class="print-grid" id="qr-grid"></div>
-
+  <div class="row controles" style="margin-top:16px; justify-content:flex-end">
+    <button class="btn primary hidden" id="btn-print">🖨 Imprimir / Guardar PDF</button>
+  </div>
+  <div id="hojas"></div>
 </main>
-
-<footer class="foot no-print">Ver docs/03-GENERAR-QR-HOJAS-DE-RUTA.md para el formato recomendado de impresión.</footer>
 
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-async function cargarProyectos() {
-  const sel = document.getElementById('sel-proyecto');
-  sel.innerHTML = '<option value="">— Ingresar manualmente abajo —</option>';
+const $ = id => document.getElementById(id);
+let CFG = { operaciones: [], proyectos: [] };
+const TIPO_TXT = { PROYECTO: 'Operación', OPCIONAL: 'Operación', PAUSA: 'Pausa', FIN: 'Fin de jornada' };
+
+function idValido(id) { return /^[A-Za-z0-9-]{1,20}$/.test(id); }
+
+function render(etiquetas, porHoja) {
+  const cont = $('hojas');
+  cont.innerHTML = '';
+  for (let i = 0; i < etiquetas.length; i += porHoja) {
+    const hoja = document.createElement('div');
+    hoja.className = 'hoja ' + (porHoja === 1 ? 'g1' : 'g6');
+    etiquetas.slice(i, i + porHoja).forEach(e => {
+      const d = document.createElement('div');
+      d.className = 'etq';
+      d.innerHTML = `<span class="tag">${esc(e.tag)}</span><div class="qr"></div><div class="t1">${esc(e.t1)}</div><div class="t2">${esc(e.t2 || '')}</div><div class="cod">${esc(e.codigo)}</div>`;
+      hoja.appendChild(d);
+      const size = porHoja === 1 ? 420 : 150;
+      new QRCode(d.querySelector('.qr'), { text: e.codigo, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+    });
+    cont.appendChild(hoja);
+  }
+  $('btn-print').classList.toggle('hidden', !etiquetas.length);
+  cont.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Lista por defecto (la misma que crea setupHojas) por si no hay conexión con la planilla
+const OPS_DEFAULT = [['DESCARGA','Descarga de materiales','OPCIONAL'],['ACOMODO','Acomodamiento','OPCIONAL'],['CORTE','Corte','PROYECTO'],['PEGADO','Pegado de cantos','PROYECTO'],['PROCMULT','Procesado con múltiple','PROYECTO'],['PROCSIN','Procesado sin múltiple','PROYECTO'],['RANURADO','Ranurado','PROYECTO'],['ARMADO','Armado','PROYECTO'],['LIMPIEZA','Limpieza','OPCIONAL'],['EMBALAJE','Embalaje','PROYECTO'],['CARGA','Carga','PROYECTO'],['DESCANSO','Descanso','PAUSA'],['ALMUERZO','Almuerzo','PAUSA'],['PAUSA','Pausa','PAUSA'],['FIN','Fin de jornada','FIN']]
+  .map(([codigo, nombre, tipo]) => ({ codigo, nombre, tipo }));
+
+function etiquetasOps() {
+  return (CFG.operaciones.length ? CFG.operaciones : OPS_DEFAULT).map(o => ({
+    codigo: 'OP-' + o.codigo,
+    t1: o.nombre,
+    t2: o.tipo === 'PAUSA' ? 'Escanear al empezar y al volver' : o.tipo === 'FIN' ? 'Escanear al irse' : o.tipo === 'OPCIONAL' ? 'Proyecto opcional · escanear al empezar y al terminar' : 'Escanear primero el proyecto · al terminar, de nuevo este',
+    tag: TIPO_TXT[o.tipo] || 'Operación'
+  }));
+}
+
+$('btn-ops-grandes').addEventListener('click', () => render(etiquetasOps(), 1));
+$('btn-ops-chicos').addEventListener('click', () => render(etiquetasOps(), 6));
+$('btn-proy').addEventListener('click', () => {
+  const sel = [...document.querySelectorAll('#lista-proy input:checked')].map(i => CFG.proyectos.find(p => p.id === i.value));
+  const manual = $('proy-manual').value.trim();
+  if (manual) {
+    if (!idValido(manual)) { alertar('El ID solo puede tener letras, números y guiones (ej. 104 o B-104).'); return; }
+    sel.push(CFG.proyectos.find(p => p.id.toUpperCase() === manual.toUpperCase()) || { id: manual, cliente: '(no está en la planilla todavía)', descripcion: '' });
+  }
+  if (!sel.length) { alertar('Elegí al menos un proyecto.'); return; }
+  const malos = sel.filter(p => !idValido(p.id));
+  if (malos.length) { alertar('Estos IDs tienen caracteres que la pistola puede leer mal (usá solo letras, números y guiones): ' + malos.map(p => p.id).join(', ')); return; }
+  render(sel.map(p => ({ codigo: 'PRY-' + p.id, t1: 'Proyecto ' + p.id, t2: [p.cliente, p.descripcion].filter(Boolean).join(' · '), tag: 'Proyecto' })), 6);
+});
+$('btn-print').addEventListener('click', () => window.print());
+
+function alertar(t) { const d = document.createElement('div'); d.className = 'toast error'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 4000); }
+
+(async () => {
+  const el = $('estado-red');
   try {
-    const res = await Api.get('proyectosActivos');
-    (res.proyectos || []).forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id_proyecto;
-      opt.dataset.cliente = p.cliente || '';
-      opt.textContent = `${p.id_proyecto} — ${p.cliente || 's/cliente'} (${p.tipo_servicio || ''})`;
-      sel.appendChild(opt);
-    });
-  } catch (err) {
-    console.warn('No se pudieron cargar proyectos activos:', err.message);
+    const r = await Api.get('config');
+    if (!r.ok) throw new Error(r.error);
+    CFG = r;
+    el.className = 'pill ok'; el.innerHTML = '<span class="dot"></span> Conectado';
+    $('lista-proy').innerHTML = CFG.proyectos.length
+      ? CFG.proyectos.map(p => `<label><input type="checkbox" value="${esc(p.id)}"> <b>${esc(p.id)}</b> <span class="muted">${esc(p.cliente)}</span></label>`).join('')
+      : '<span class="muted">No hay proyectos activos en la planilla.</span>';
+  } catch (e) {
+    el.className = 'pill bad'; el.innerHTML = '<span class="dot"></span> Sin conexión';
+    $('lista-proy').innerHTML = `<span class="msg error">No se pudo leer la planilla: ${esc(e.message)}</span>`;
   }
-}
-
-function generarQRs() {
-  const sel = document.getElementById('sel-proyecto');
-  let proyectoId, cliente;
-
-  if (sel.value) {
-    proyectoId = sel.value;
-    cliente = sel.selectedOptions[0].dataset.cliente || '';
-  } else {
-    proyectoId = document.getElementById('manual-id').value.trim();
-    cliente = document.getElementById('manual-cliente').value.trim();
-  }
-
-  if (!proyectoId) {
-    alert('Ingresá o seleccioná un ID de proyecto.');
-    return;
-  }
-
-  const grid = document.getElementById('qr-grid');
-  grid.innerHTML = '';
-  document.getElementById('print-title').textContent = `Hoja de Ruta — ${proyectoId}${cliente ? ' — ' + cliente : ''}`;
-  document.getElementById('acciones-card').style.display = 'block';
-
-  APP_CONFIG.OPERACIONES.forEach(op => {
-    const payload = JSON.stringify({
-      proyecto_id: proyectoId,
-      operacion_id: op.id,
-      operacion_nombre: op.nombre
-    });
-
-    const card = document.createElement('div');
-    card.className = 'print-card';
-    card.innerHTML = `
-      <div id="qr-${op.id}"></div>
-      <div class="op-nombre">${op.id} · ${op.nombre}</div>
-      <div class="meta">Proyecto: ${proyectoId}${cliente ? ' · ' + cliente : ''}</div>
-    `;
-    grid.appendChild(card);
-
-    new QRCode(document.getElementById('qr-' + op.id), {
-      text: payload,
-      width: 200,
-      height: 200,
-      correctLevel: QRCode.CorrectLevel.M
-    });
-  });
-
-  grid.scrollIntoView({ behavior: 'smooth' });
-}
-
-document.getElementById('btn-generar').onclick = generarQRs;
-document.getElementById('btn-imprimir').onclick = () => window.print();
-document.getElementById('btn-volver').onclick = () => {
-  document.getElementById('qr-grid').innerHTML = '';
-  document.getElementById('acciones-card').style.display = 'none';
-};
-
-(function init() {
-  if (!Api.isConfigured()) {
-    document.getElementById('config-warning').style.display = 'block';
-  }
-  cargarProyectos();
 })();
 </script>
 </body>

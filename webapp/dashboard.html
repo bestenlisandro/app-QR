@@ -1,194 +1,404 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#14171a">
+<meta name="theme-color" content="#121417">
 <title>Dashboard de Producción</title>
 <link rel="stylesheet" href="styles.css">
 <style>
-  main { max-width: 1100px; }
-  .grid-2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
-  @media (min-width: 900px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
-  .operarios-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
-  @media (min-width: 720px) { .operarios-grid { grid-template-columns: repeat(3, 1fr); } }
-  .operario-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
-  .operario-card .nombre { font-size: 1.1rem; font-weight: 800; display:flex; justify-content:space-between; align-items:center; }
-  .operario-card .cronometro { font-size: 1.8rem; font-weight: 800; color: var(--amber); text-align: center; margin: 10px 0; font-variant-numeric: tabular-nums; }
-  .operario-card .tarea-info { font-size: .85rem; color: var(--text-dim); text-align: center; }
-  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; animation: pulse 1.4s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-  table.proj-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-  table.proj-table th, table.proj-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
-  table.proj-table th { color: var(--text-dim); font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .kpi .v { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kpi .l { color: var(--dim); font-size: .8rem; }
+  .kpi.warn .v { color: var(--amber); }
+  section.tabp { display: none; }
+  section.tabp.active { display: block; }
+  .bloque { margin-top: 20px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--dim); border: 0; padding: 8px 12px; cursor: pointer; font-weight: 600; }
+  .seg button.active { background: var(--panel-2); color: var(--text); }
+  .linea { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: .9rem; align-items: baseline; }
+  .linea .h { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 92px; }
+  .linea .d { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dim); }
+  .rev { color: var(--amber); font-size: .8rem; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; }
+  .modal .field input, .modal .field select { width: 100%; }
+  .barra { height: 8px; border-radius: 4px; background: var(--amber); display: inline-block; vertical-align: middle; margin-left: 8px; }
+  td.estado-Abierta { color: var(--green); }
+  td.estado-Cierre { color: var(--amber); }
 </style>
 </head>
 <body>
-
-<div class="topbar">
-  <h1>📊 Dashboard de Producción</h1>
-  <div class="pill"><span class="live-dot"></span><span id="last-update">actualizando…</span></div>
-</div>
-
-<main>
-
-  <p id="config-warning" class="hint" style="display:none;color:#e74c3c;text-align:center;">
-    ⚠️ Falta configurar la URL del Web App en <code>webapp/config.js</code>.
-  </p>
-
-  <!-- KPIs generales del taller -->
-  <div class="kpi-grid">
-    <div class="kpi"><div class="num" id="kpi-hoy">0.0</div><div class="lbl">Horas-Hombre hoy</div></div>
-    <div class="kpi"><div class="num" id="kpi-total">0.0</div><div class="lbl">Horas-Hombre histórico</div></div>
-    <div class="kpi"><div class="num" id="kpi-activas">0</div><div class="lbl">Tareas en curso ahora</div></div>
-    <div class="kpi"><div class="num" id="kpi-finalizadas">0</div><div class="lbl">Tareas finalizadas hoy</div></div>
+<header class="topbar">
+  <div><h1>Producción en tiempo real</h1><div class="sub" id="actualizado">—</div></div>
+  <div class="row">
+    <span class="pill" id="estado-red"><span class="dot"></span> …</span>
   </div>
+  <nav class="tabs" style="width:100%">
+    <button class="tab active" data-tab="ahora">Ahora</button>
+    <button class="tab" data-tab="reporte">Reporte por período</button>
+    <button class="tab" data-tab="registros">Registros y correcciones</button>
+  </nav>
+</header>
 
-  <!-- Estado en vivo por operario -->
-  <div class="card">
-    <h2>Estado por operario</h2>
-    <div class="operarios-grid" id="operarios-grid"></div>
-  </div>
-
-  <div class="grid-2">
-    <!-- Horas por operación -->
-    <div class="op-card">
-      <div class="op-card-header"><span class="nombre">Horas-Hombre por operación</span></div>
-      <div id="operaciones-bars"></div>
+<main class="wrap">
+  <!-- ============ AHORA ============ -->
+  <section class="tabp active" id="tab-ahora">
+    <div class="ops-grid" id="cards"></div>
+    <div class="bloque">
+      <h2>Hoy · horas por operario y operación <span class="muted small">(incluye lo que está en curso)</span></h2>
+      <div class="tabla-wrap" id="tabla-hoy"></div>
     </div>
-
-    <!-- Horas por operario -->
-    <div class="op-card">
-      <div class="op-card-header"><span class="nombre">Horas-Hombre por operario</span></div>
-      <div id="operarios-bars"></div>
+    <div class="bloque">
+      <h2>Hoy · lo que hizo cada uno</h2>
+      <div class="ops-grid" id="lineas-hoy"></div>
     </div>
-  </div>
+  </section>
 
-  <!-- Horas por proyecto -->
-  <div class="card">
-    <h2>Horas-Hombre por proyecto</h2>
-    <div style="overflow-x:auto;">
-      <table class="proj-table">
-        <thead><tr><th>Proyecto</th><th>Horas-Hombre</th><th>Desglose por operación</th></tr></thead>
-        <tbody id="proyectos-tbody"></tbody>
-      </table>
+  <!-- ============ REPORTE ============ -->
+  <section class="tabp" id="tab-reporte">
+    <div class="card">
+      <div class="row">
+        <div><label>Desde</label><input type="date" id="desde"></div>
+        <div><label>Hasta</label><input type="date" id="hasta"></div>
+        <div><label>Período rápido</label>
+          <select id="preset">
+            <option value="">—</option><option value="hoy">Hoy</option><option value="ayer">Ayer</option>
+            <option value="semana">Esta semana</option><option value="mes">Este mes</option><option value="mesant">Mes anterior</option>
+          </select></div>
+        <div><label>Operario</label><select id="f-operario"><option value="">Todos</option></select></div>
+        <div><label>Proyecto</label><select id="f-proyecto"><option value="">Todos</option></select></div>
+        <button class="btn primary" id="btn-reporte">Ver reporte</button>
+        <button class="btn" id="btn-csv">⬇ Excel (CSV)</button>
+      </div>
     </div>
-  </div>
+    <div id="reporte" class="bloque"><p class="muted">Elegí el período y tocá “Ver reporte”.</p></div>
+  </section>
 
+  <!-- ============ REGISTROS ============ -->
+  <section class="tabp" id="tab-registros">
+    <div class="card" id="login-box">
+      <h2>Correcciones</h2>
+      <p class="muted small">Solo para Maxi, Daniel y Lisandro. El PIN está en la pestaña <b>Config</b> de la planilla.</p>
+      <div class="row">
+        <div><label>Quién corrige</label><select id="quien"><option>Maxi</option><option>Daniel</option><option>Lisandro</option></select></div>
+        <div><label>PIN</label><input type="password" id="pin" inputmode="numeric" style="width:120px"></div>
+        <button class="btn primary" id="btn-pin">Entrar</button>
+      </div>
+    </div>
+    <div id="admin-box" class="hidden">
+      <div class="card">
+        <div class="row">
+          <div><label>Desde</label><input type="date" id="r-desde"></div>
+          <div><label>Hasta</label><input type="date" id="r-hasta"></div>
+          <div><label>Operario</label><select id="r-operario"><option value="">Todos</option></select></div>
+          <label style="display:flex;gap:6px;align-items:center;margin:0 0 10px;color:var(--text)"><input type="checkbox" id="r-revisar" style="min-height:0"> Solo abiertos / a revisar</label>
+          <button class="btn" id="btn-r-cargar">Buscar</button>
+          <button class="btn primary" id="btn-nuevo">+ Agregar registro</button>
+          <span class="muted small" id="quien-txt"></span>
+        </div>
+      </div>
+      <div class="bloque tabla-wrap" id="tabla-registros"></div>
+    </div>
+  </section>
 </main>
 
-<footer class="foot">Se actualiza automáticamente cada <span id="poll-secs">6</span> segundos.</footer>
+<div id="modal-root"></div>
 
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script>
-document.getElementById('poll-secs').textContent = Math.round(APP_CONFIG.DASHBOARD_POLL_MS / 1000);
+const $ = id => document.getElementById(id);
+let CFG = { operarios: [], operaciones: [], proyectos: [] };
+let ESTADO = null;
+let REP = [];          // registros del reporte
+let REG = [];          // registros en correcciones
+let vista = 'horas';   // horas | pctFila | pctTotal
+let admin = null;      // { pin, quien }
+try { admin = JSON.parse(sessionStorage.getItem('dash_admin') || 'null'); } catch (e) {}
 
-function fmtHoras(n) { return (Number(n) || 0).toFixed(2); }
+function toast(t, err) { const d = document.createElement('div'); d.className = 'toast' + (err ? ' error' : ''); d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
+function setRed(ok) { const el = $('estado-red'); el.className = 'pill ' + (ok ? 'ok' : 'bad'); el.innerHTML = `<span class="dot"></span> ${ok ? 'En vivo' : 'Sin conexión'}`; }
+function nombreOp(cod) { const o = CFG.operaciones.find(x => x.codigo === cod); return o ? o.nombre : cod; }
+function ordenOps() { return CFG.operaciones.filter(o => o.tipo !== 'FIN').map(o => o.nombre); }
 
-function formatHMSFromMinutes(min) {
-  const totalSeconds = Math.floor((Number(min) || 0) * 60);
-  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
-  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-  const s = String(totalSeconds % 60).padStart(2, '0');
-  return `${h}:${m}:${s}`;
-}
+// ---------- Tabs ----------
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.tabp').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
+  try { localStorage.setItem('dash_tab', t.dataset.tab); } catch (e) {}
+}));
 
-let lastData = null;
-let tickInterval = null;
-
-function renderKpis(d) {
-  document.getElementById('kpi-hoy').textContent = fmtHoras(d.totales.horas_hombre_hoy);
-  document.getElementById('kpi-total').textContent = fmtHoras(d.totales.horas_hombre_total);
-  document.getElementById('kpi-activas').textContent = d.tareas_activas.length;
-  document.getElementById('kpi-finalizadas').textContent = d.totales.tareas_finalizadas_hoy;
-}
-
-function renderOperarios(d) {
-  const grid = document.getElementById('operarios-grid');
-  grid.innerHTML = '';
-  Object.entries(d.por_operario).forEach(([nombre, info]) => {
-    const div = document.createElement('div');
-    div.className = 'operario-card';
-    const estado = info.estado || 'Libre';
-    const badgeClass = estado === 'En Curso' ? 'badge-en-curso' : estado === 'Pausado' ? 'badge-pausado' : 'badge-libre';
-    const tarea = info.tarea_actual;
-    div.innerHTML = `
-      <div class="nombre">${nombre} <span class="badge ${badgeClass}">${estado}</span></div>
-      <div class="cronometro" data-min="${tarea ? tarea.minutos_transcurridos : 0}" data-live="${estado === 'En Curso' ? '1' : '0'}">
-        ${tarea ? formatHMSFromMinutes(tarea.minutos_transcurridos) : '—'}
-      </div>
-      <div class="tarea-info">
-        ${tarea ? `${tarea.operacion}<br>Proyecto ${tarea.proyecto}` : 'Sin tarea activa'}
-      </div>
-      <div class="tarea-info" style="margin-top:6px;">Total finalizado: ${fmtHoras(info.horas_hombre)} h</div>
-    `;
-    grid.appendChild(div);
+// ---------- Pivot genérico ----------
+// regs -> { filas: [..], cols: [..], m: {fila: {col: min}} }
+function pivot(regs, fFila, fCol, ordenCols) {
+  const m = {}, cols = new Set(), filas = new Set();
+  regs.forEach(r => {
+    const f = fFila(r), c = fCol(r);
+    if (f == null || c == null) return;
+    const min = minutosDe(r);
+    filas.add(f); cols.add(c);
+    m[f] = m[f] || {}; m[f][c] = (m[f][c] || 0) + min;
   });
+  let colsArr = [...cols];
+  if (ordenCols) colsArr.sort((a, b) => (ordenCols.indexOf(a) + 1 || 999) - (ordenCols.indexOf(b) + 1 || 999));
+  return { filas: [...filas], cols: colsArr, m };
 }
-
-function renderBars(containerId, dataObj, colorVar) {
-  const container = document.getElementById(containerId);
-  const entries = Object.entries(dataObj);
-  const max = Math.max(1, ...entries.map(([,v]) => v));
-  container.innerHTML = entries.map(([label, value]) => `
-    <div class="bar-row">
-      <div class="label">${label}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, (value / max) * 100)}%"></div></div>
-      <div class="value">${fmtHoras(value)} h</div>
-    </div>
-  `).join('') || '<p class="hint">Sin datos todavía.</p>';
-}
-
-function renderProyectos(d) {
-  const tbody = document.getElementById('proyectos-tbody');
-  const entries = Object.entries(d.por_proyecto);
-  if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="hint">Sin datos todavía.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = entries
-    .sort((a, b) => b[1].horas_hombre - a[1].horas_hombre)
-    .map(([proyecto, info]) => {
-      const desglose = Object.entries(info.por_operacion)
-        .map(([op, h]) => `${op}: ${fmtHoras(h)}h`)
-        .join(' · ');
-      return `<tr><td>${proyecto}</td><td>${fmtHoras(info.horas_hombre)} h</td><td class="hint">${desglose || '—'}</td></tr>`;
-    }).join('');
-}
-
-function tickCronometros() {
-  document.querySelectorAll('.cronometro[data-live="1"]').forEach(el => {
-    const min = Number(el.dataset.min) + (1 / 60);
-    el.dataset.min = min;
-    el.textContent = formatHMSFromMinutes(min);
+function tablaPivot(p, titulo, modo, ordenFilas) {
+  if (!p.filas.length) return '<p class="muted" style="padding:12px">Sin datos.</p>';
+  const filas = ordenFilas ? p.filas.sort((a, b) => (ordenFilas.indexOf(a) + 1 || 999) - (ordenFilas.indexOf(b) + 1 || 999) || String(a).localeCompare(String(b))) : p.filas.sort();
+  const totFila = f => p.cols.reduce((s, c) => s + (p.m[f][c] || 0), 0);
+  const totCol = c => filas.reduce((s, f) => s + (p.m[f][c] || 0), 0);
+  const total = filas.reduce((s, f) => s + totFila(f), 0);
+  const val = (v, base) => {
+    if (!v) return '<td class="cero">–</td>';
+    if (modo === 'pctFila' || modo === 'pctTotal') return `<td>${fmtPct(v / (base || 1) * 100)}</td>`;
+    return `<td>${fmtHoras(v)}</td>`;
+  };
+  let h = `<table><thead><tr><th>${esc(titulo)}</th>${p.cols.map(c => `<th>${esc(c)}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+  filas.forEach(f => {
+    const tf = totFila(f);
+    const base = modo === 'pctFila' ? tf : total;
+    h += `<tr><td>${esc(f)}</td>${p.cols.map(c => val(p.m[f][c], base)).join('')}${modo === 'horas' ? `<td><b>${fmtHoras(tf)}</b></td>` : `<td><b>${fmtPct(tf / ((modo === 'pctFila' ? tf : total) || 1) * 100)}</b></td>`}</tr>`;
   });
+  const baseT = total || 1;
+  h += `<tr class="total"><td>Total</td>${p.cols.map(c => modo === 'horas' ? `<td>${fmtHoras(totCol(c))}</td>` : `<td>${fmtPct(totCol(c) / baseT * 100)}</td>`).join('')}<td>${modo === 'horas' ? fmtHoras(total) : '100 %'}</td></tr>`;
+  return h + '</tbody></table>';
 }
 
-async function refresh() {
+// ---------- AHORA ----------
+function renderAhora() {
+  if (!ESTADO) return;
+  const ahora = Date.now();
+  $('cards').innerHTML = ESTADO.operarios.map(o => {
+    const a = o.abierta;
+    const clase = !a ? 'libre' : a.tipo === 'Pausa' ? 'pausa' : 'trabajando';
+    const ult = o.ultimo && !a ? `Último: ${esc(o.ultimo.operacion)} · terminó ${fmtHora(o.ultimo.fin)} ${o.ultimo.fecha !== hoyISO() ? '(' + fmtFecha(o.ultimo.fin) + ')' : ''}` : '';
+    return `<div class="op-card ${clase}">
+      <div class="nombre">${esc(o.nombre)} <span class="pill ${a ? (a.tipo === 'Pausa' ? 'warn' : 'ok') : ''}">${a ? (a.tipo === 'Pausa' ? 'En pausa' : 'Trabajando') : 'Sin actividad'}</span></div>
+      <div class="actividad">${a ? esc(a.operacion) : '—'}</div>
+      <div class="proyecto">${a ? (a.proyecto ? 'Proyecto ' + esc(a.proyecto) + (a.cliente ? ' · ' + esc(a.cliente) : '') : (a.tipo === 'Pausa' ? '' : '<span class="rev">⚠ sin proyecto</span>')) : ult}
+        ${a ? `<br><span class="muted small">desde las ${fmtHora(a.inicio)}</span>` : ''}</div>
+      <div class="timer">${a ? fmtDur((ahora - a.inicio) / 60000) : '—'}</div>
+    </div>`;
+  }).join('');
+  const prod = ESTADO.hoy;
+  const p = pivot(prod, r => r.operario, r => r.operacion, ordenOps());
+  $('tabla-hoy').innerHTML = tablaPivot(p, 'Operario', 'horas', CFG.operarios.map(o => o.nombre));
+  $('lineas-hoy').innerHTML = ESTADO.operarios.map(o => {
+    const rs = prod.filter(r => r.operario === o.nombre).sort((a, b) => a.inicio - b.inicio);
+    return `<div class="card"><h3>${esc(o.nombre)}</h3>${rs.length ? rs.map(r => `<div class="linea">
+        <span class="h">${fmtHora(r.inicio)}–${r.estado === 'Abierta' ? 'ahora' : fmtHora(r.fin)}</span>
+        <span>${esc(r.operacion)}${r.proyecto ? ' · <span class="muted">' + esc(r.proyecto) + '</span>' : ''}${r.obs ? `<br><span class="rev">${esc(r.obs)}</span>` : ''}</span>
+        <span class="d">${fmtDur(minutosDe(r))}</span></div>`).join('') : '<p class="muted small">Sin registros hoy.</p>'}</div>`;
+  }).join('');
+}
+async function refrescarEstado() {
   try {
-    const d = await Api.get('dashboard');
-    if (!d.ok) throw new Error(d.error || 'Error al consultar el dashboard');
-    lastData = d;
-    renderKpis(d);
-    renderOperarios(d);
-    renderBars('operaciones-bars', d.por_operacion);
-    renderBars('operarios-bars', Object.fromEntries(Object.entries(d.por_operario).map(([k, v]) => [k, v.horas_hombre])));
-    renderProyectos(d);
-    document.getElementById('last-update').textContent = 'actualizado ' + new Date().toLocaleTimeString('es-AR');
-  } catch (err) {
-    document.getElementById('last-update').textContent = 'error: ' + err.message;
-  }
+    const r = await Api.get('estado');
+    if (!r.ok) throw new Error(r.error);
+    ESTADO = r; setRed(true);
+    $('actualizado').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-AR');
+    renderAhora();
+  } catch (e) { setRed(false); }
 }
 
-(function init() {
-  if (!Api.isConfigured()) {
-    document.getElementById('config-warning').style.display = 'block';
-    return;
+// ---------- REPORTE ----------
+function setPreset(v, idD, idH) {
+  const d = new Date(); let a = new Date(d), b = new Date(d);
+  if (v === 'ayer') { a.setDate(d.getDate() - 1); b = new Date(a); }
+  if (v === 'semana') { a.setDate(d.getDate() - ((d.getDay() + 6) % 7)); }
+  if (v === 'mes') { a = new Date(d.getFullYear(), d.getMonth(), 1); }
+  if (v === 'mesant') { a = new Date(d.getFullYear(), d.getMonth() - 1, 1); b = new Date(d.getFullYear(), d.getMonth(), 0); }
+  $(idD).value = hoyISO(a); $(idH).value = hoyISO(b);
+}
+$('preset').addEventListener('change', e => { if (e.target.value) { setPreset(e.target.value, 'desde', 'hasta'); cargarReporte(); } });
+$('btn-reporte').addEventListener('click', cargarReporte);
+$('f-operario').addEventListener('change', renderReporte);
+$('f-proyecto').addEventListener('change', renderReporte);
+
+async function cargarReporte() {
+  $('reporte').innerHTML = '<p class="muted">Cargando…</p>';
+  try {
+    const r = await Api.get('registros', { desde: $('desde').value, hasta: $('hasta').value });
+    if (!r.ok) throw new Error(r.error);
+    REP = r.registros;
+    const proys = [...new Set(REP.map(x => x.proyecto).filter(Boolean))].sort();
+    const sel = $('f-proyecto').value;
+    $('f-proyecto').innerHTML = '<option value="">Todos</option>' + proys.map(p => `<option ${p === sel ? 'selected' : ''}>${esc(p)}</option>`).join('');
+    renderReporte();
+  } catch (e) { $('reporte').innerHTML = `<p class="msg error">No se pudo cargar: ${esc(e.message)}</p>`; }
+}
+
+function renderReporte() {
+  const fo = $('f-operario').value, fp = $('f-proyecto').value;
+  const regs = REP.filter(r => (!fo || r.operario === fo) && (!fp || r.proyecto === fp));
+  const sum = f => regs.filter(f).reduce((s, r) => s + minutosDe(r), 0);
+  const tot = sum(() => true), prodM = sum(r => r.tipo === 'Productiva'), gen = sum(r => r.tipo === 'General'), pau = sum(r => r.tipo === 'Pausa');
+  const revisar = regs.filter(r => r.estado === 'Abierta' || /revisar/i.test(r.obs || '')).length;
+  const pct = v => tot ? ' · ' + (v / tot * 100).toFixed(0) + ' %' : '';
+  const trabajo = regs.filter(r => r.tipo !== 'Pausa');
+  const ordenOper = CFG.operarios.map(o => o.nombre);
+
+  let h = `<div class="kpis">
+    <div class="kpi"><div class="v">${fmtHoras(tot)}</div><div class="l">Horas totales registradas</div></div>
+    <div class="kpi"><div class="v">${fmtHoras(prodM)}</div><div class="l">En proyectos${pct(prodM)}</div></div>
+    <div class="kpi"><div class="v">${fmtHoras(gen)}</div><div class="l">Tareas generales${pct(gen)}</div></div>
+    <div class="kpi"><div class="v">${fmtHoras(pau)}</div><div class="l">Descanso / almuerzo / pausa${pct(pau)}</div></div>
+    <div class="kpi ${revisar ? 'warn' : ''}"><div class="v">${revisar}</div><div class="l">Registros a revisar</div></div>
+  </div>
+  <div class="row" style="justify-content:space-between">
+    <div class="seg" id="seg-vista">
+      <button data-v="horas" class="${vista === 'horas' ? 'active' : ''}">Horas</button>
+      <button data-v="pctFila" class="${vista === 'pctFila' ? 'active' : ''}">% de cada fila</button>
+      <button data-v="pctTotal" class="${vista === 'pctTotal' ? 'active' : ''}">% del total</button>
+    </div>
+    <span class="muted small">Horas en decimales (1,50 = 1 h 30 min). Lo que está en curso suma hasta ahora.</span>
+  </div>
+  <div class="bloque"><h2>Por operario y operación</h2><div class="tabla-wrap">${tablaPivot(pivot(regs, r => r.operario, r => r.operacion, ordenOps()), 'Operario', vista, ordenOper)}</div></div>
+  <div class="bloque"><h2>Por proyecto y operación <span class="muted small">(sin pausas)</span></h2><div class="tabla-wrap">${tablaPivot(pivot(trabajo, r => r.proyecto || '(sin proyecto)', r => r.operacion, ordenOps()), 'Proyecto', vista)}</div></div>
+  <div class="bloque"><h2>Por proyecto y operario <span class="muted small">(sin pausas)</span></h2><div class="tabla-wrap">${tablaPivot(pivot(trabajo, r => r.proyecto || '(sin proyecto)', r => r.operario, ordenOper), 'Proyecto', vista)}</div></div>
+  <div class="bloque"><h2>Por día y operario</h2><div class="tabla-wrap">${tablaPivot(pivot(regs, r => r.fecha.split('-').reverse().join('/'), r => r.operario, ordenOper), 'Día', vista, [...new Set(regs.map(r => r.fecha))].sort().map(f => f.split('-').reverse().join('/')))}</div></div>`;
+  $('reporte').innerHTML = h;
+  $('seg-vista').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { vista = b.dataset.v; renderReporte(); }));
+}
+
+$('btn-csv').addEventListener('click', async () => {
+  if (!REP.length) await cargarReporte();
+  const fo = $('f-operario').value, fp = $('f-proyecto').value;
+  const regs = REP.filter(r => (!fo || r.operario === fo) && (!fp || r.proyecto === fp));
+  const num = v => String(Math.round(v * 100) / 100).replace('.', ',');
+  const dt = ms => ms ? new Date(ms).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '') : '';
+  const cab = ['Fecha', 'Operario', 'Proyecto', 'Cliente', 'Operacion', 'Tipo', 'Inicio', 'Fin', 'Minutos', 'Horas', 'Estado', 'Observacion'];
+  const filas = regs.map(r => [r.fecha.split('-').reverse().join('/'), r.operario, r.proyecto, r.cliente, r.operacion, r.tipo, dt(r.inicio), dt(r.fin), num(minutosDe(r)), num(minutosDe(r) / 60), r.estado, r.obs]);
+  const csv = '﻿' + [cab, ...filas].map(f => f.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `tiempos_${$('desde').value}_a_${$('hasta').value}.csv`;
+  a.click();
+});
+
+// ---------- REGISTROS / CORRECCIONES ----------
+function mostrarAdmin() {
+  $('login-box').classList.toggle('hidden', !!admin);
+  $('admin-box').classList.toggle('hidden', !admin);
+  if (admin) $('quien-txt').innerHTML = `Corrigiendo como <b>${esc(admin.quien)}</b> · <a href="#" id="salir">salir</a>`;
+  const s = $('salir'); if (s) s.addEventListener('click', e => { e.preventDefault(); admin = null; try { sessionStorage.removeItem('dash_admin'); } catch (x) {} mostrarAdmin(); });
+}
+$('btn-pin').addEventListener('click', async () => {
+  const pin = $('pin').value, quien = $('quien').value;
+  try {
+    const r = await Api.post('admin', { op: 'verificar', pin, quien });
+    if (!r.ok) throw new Error(r.error);
+    admin = { pin, quien };
+    try { sessionStorage.setItem('dash_admin', JSON.stringify(admin)); } catch (e) {}
+    mostrarAdmin(); cargarRegistros();
+  } catch (e) { toast(e.message, true); }
+});
+$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-pin').click(); });
+$('btn-r-cargar').addEventListener('click', cargarRegistros);
+$('r-revisar').addEventListener('change', renderRegistros);
+$('r-operario').addEventListener('change', renderRegistros);
+
+async function cargarRegistros() {
+  $('tabla-registros').innerHTML = '<p class="muted" style="padding:12px">Cargando…</p>';
+  try {
+    const r = await Api.get('registros', { desde: $('r-desde').value, hasta: $('r-hasta').value });
+    if (!r.ok) throw new Error(r.error);
+    REG = r.registros; renderRegistros();
+  } catch (e) { $('tabla-registros').innerHTML = `<p class="msg error">${esc(e.message)}</p>`; }
+}
+function renderRegistros() {
+  const fo = $('r-operario').value, solo = $('r-revisar').checked;
+  const regs = REG.filter(r => (!fo || r.operario === fo) && (!solo || r.estado === 'Abierta' || /revisar/i.test(r.obs || '')))
+    .sort((a, b) => b.inicio - a.inicio);
+  if (!regs.length) { $('tabla-registros').innerHTML = '<p class="muted" style="padding:12px">No hay registros con ese filtro.</p>'; return; }
+  $('tabla-registros').innerHTML = `<table><thead><tr><th>Fecha</th><th class="izq">Operario</th><th class="izq">Operación</th><th class="izq">Proyecto</th><th>Inicio</th><th>Fin</th><th>Duración</th><th class="izq">Estado</th><th class="izq">Observación</th><th></th></tr></thead><tbody>
+    ${regs.map(r => `<tr>
+      <td>${esc(r.fecha.split('-').reverse().join('/'))}</td><td class="izq">${esc(r.operario)}</td><td class="izq">${esc(r.operacion)}</td>
+      <td class="izq">${esc(r.proyecto) || (r.tipo === 'Pausa' ? '' : '<span class="rev">falta</span>')}</td>
+      <td>${fmtHora(r.inicio)}</td><td>${r.estado === 'Abierta' ? '<span style="color:var(--green)">en curso</span>' : fmtHora(r.fin)}</td>
+      <td>${fmtDur(minutosDe(r))}</td><td class="izq estado-${esc(String(r.estado).split(' ')[0])}">${esc(r.estado)}</td>
+      <td class="izq"><span class="${/revisar/i.test(r.obs || '') ? 'rev' : 'muted small'}">${esc(r.obs)}</span>${r.editado ? `<br><span class="muted small">✎ ${esc(r.editado)}</span>` : ''}</td>
+      <td><button class="btn small" data-edit="${esc(r.id)}">Editar</button></td></tr>`).join('')}
+  </tbody></table>`;
+  $('tabla-registros').querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => abrirModal(REG.find(r => r.id === b.dataset.edit))));
+}
+
+function toLocalInput(ms) { if (!ms) return ''; const d = new Date(ms); return `${hoyISO(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+function fromLocalInput(v) { return v ? new Date(v).getTime() : null; }
+
+function abrirModal(r) {
+  const nuevo = !r;
+  r = r || { operario: CFG.operarios[0] && CFG.operarios[0].nombre, cod: '', proyecto: '', inicio: Date.now() - 3600000, fin: Date.now(), obs: '' };
+  const ops = CFG.operaciones.filter(o => o.tipo !== 'FIN');
+  $('modal-root').innerHTML = `<div class="modal-bg"><div class="modal">
+    <h2>${nuevo ? 'Agregar registro' : 'Corregir registro'}</h2>
+    <div class="field"><label>Operario</label><select id="m-operario">${CFG.operarios.map(o => `<option ${o.nombre === r.operario ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select></div>
+    <div class="field"><label>Operación</label><select id="m-cod">${ops.map(o => `<option value="${esc(o.codigo)}" ${o.codigo === r.cod ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select></div>
+    <div class="field"><label>Proyecto (vacío en pausas · GENERAL para tareas del taller)</label>
+      <input id="m-proyecto" list="m-proys" value="${esc(r.proyecto)}"><datalist id="m-proys"><option>GENERAL</option>${CFG.proyectos.map(p => `<option value="${esc(p.id)}">${esc(p.cliente)}</option>`).join('')}</datalist></div>
+    <div class="field"><label>Inicio</label><input type="datetime-local" id="m-inicio" value="${toLocalInput(r.inicio)}"></div>
+    <div class="field"><label>Fin ${!nuevo && r.estado === 'Abierta' ? '(vacío = sigue en curso)' : ''}</label><input type="datetime-local" id="m-fin" value="${toLocalInput(r.fin)}"></div>
+    <div class="field"><label>Observación</label><input id="m-obs" value="${esc(r.obs)}"></div>
+    <div class="row" style="justify-content:space-between;margin-top:16px">
+      ${nuevo ? '<span></span>' : '<button class="btn danger" id="m-borrar">Borrar</button>'}
+      <div class="row">
+        ${!nuevo && r.estado === 'Abierta' ? '<button class="btn" id="m-cerrar">Cerrar ahora</button>' : ''}
+        <button class="btn" id="m-cancelar">Cancelar</button>
+        <button class="btn primary" id="m-guardar">Guardar</button>
+      </div>
+    </div></div></div>`;
+  const cerrar = () => { $('modal-root').innerHTML = ''; };
+  $('m-cancelar').addEventListener('click', cerrar);
+  const enviar = async (op, cambios, id) => {
+    try {
+      const res = await Api.post('admin', { pin: admin.pin, quien: admin.quien, op, id, cambios });
+      if (!res.ok) throw new Error(res.error);
+      cerrar(); toast('Guardado'); cargarRegistros(); refrescarEstado();
+    } catch (e) {
+      toast(e.message, true);
+      if (/PIN/.test(e.message)) { admin = null; mostrarAdmin(); cerrar(); }
+    }
+  };
+  $('m-guardar').addEventListener('click', () => {
+    const cambios = {
+      operario: $('m-operario').value, cod: $('m-cod').value, proyecto: $('m-proyecto').value.trim(),
+      inicio: fromLocalInput($('m-inicio').value), fin: fromLocalInput($('m-fin').value), obs: $('m-obs').value
+    };
+    if (!cambios.inicio) return toast('Falta la hora de inicio', true);
+    if (cambios.fin && cambios.fin < cambios.inicio) return toast('El fin es anterior al inicio', true);
+    if (!nuevo && !cambios.fin) delete cambios.fin;
+    enviar(nuevo ? 'crear' : 'editar', cambios, r.id);
+  });
+  if (!nuevo) {
+    $('m-borrar').addEventListener('click', () => { if (confirm('¿Borrar este registro? No se puede deshacer.')) enviar('borrar', {}, r.id); });
+    const c = $('m-cerrar'); if (c) c.addEventListener('click', () => enviar('cerrar', { fin: Date.now() }, r.id));
   }
-  refresh();
-  setInterval(refresh, APP_CONFIG.DASHBOARD_POLL_MS);
-  tickInterval = setInterval(tickCronometros, 1000);
+}
+$('btn-nuevo').addEventListener('click', () => abrirModal(null));
+
+// ---------- Inicio ----------
+(async () => {
+  setPreset('mes', 'desde', 'hasta'); $('preset').value = 'mes';
+  setPreset('semana', 'r-desde', 'r-hasta');
+  try {
+    const r = await Api.get('config');
+    if (!r.ok) throw new Error(r.error);
+    CFG = r; setRed(true);
+  } catch (e) { setRed(false); toast('No se pudo conectar con la planilla: ' + e.message, true); }
+  const opts = CFG.operarios.map(o => `<option>${esc(o.nombre)}</option>`).join('');
+  $('f-operario').innerHTML += opts; $('r-operario').innerHTML += opts;
+  let tab = 'ahora'; try { tab = localStorage.getItem('dash_tab') || 'ahora'; } catch (e) {}
+  const btn = document.querySelector(`.tab[data-tab="${tab}"]`); if (btn) btn.click();
+  mostrarAdmin();
+  await refrescarEstado();
+  cargarReporte();
+  if (admin) cargarRegistros();
+  setInterval(refrescarEstado, APP_CONFIG.REFRESCO_SEG * 1000);
+  setInterval(renderAhora, 1000);
 })();
 </script>
 </body>

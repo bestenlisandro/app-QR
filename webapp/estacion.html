@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estación de escaneo</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  #captura { position: absolute; left: -9999px; opacity: 0; }
+  #aviso-foco { display: none; background: var(--red); color: #fff; text-align: center; padding: 18px; font-size: 1.3rem; font-weight: 800; cursor: pointer; }
+  body.sin-foco #aviso-foco { display: block; }
+  .ultimas { margin-top: 16px; }
+  .ultimas li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: .9rem; list-style: none; }
+  .ultimas ul { margin: 0; padding: 0; max-height: 260px; overflow: auto; }
+  .prueba { display: flex; gap: 8px; margin-top: 12px; }
+  .prueba input { flex: 1; }
+</style>
+</head>
+<body>
+<div id="aviso-foco">⚠ La pantalla no está recibiendo las lecturas de las pistolas — HACÉ CLIC ACÁ</div>
+<header class="topbar">
+  <div>
+    <h1>Estación de escaneo · Taller</h1>
+    <div class="sub" id="reloj">--:--</div>
+  </div>
+  <div class="row">
+    <span class="pill" id="estado-red"><span class="dot"></span> Conectando…</span>
+    <span class="pill hidden" id="pendientes"></span>
+    <a class="btn small" href="dashboard.html" target="_blank">Dashboard</a>
+  </div>
+</header>
+
+<input id="captura" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+<main class="wrap">
+  <div class="ops-grid" id="grid"></div>
+
+  <div class="card ultimas">
+    <h3>Últimas lecturas</h3>
+    <ul id="log"></ul>
+    <details class="no-print" style="margin-top:12px">
+      <summary class="muted small">Probar sin pistola (escribir un código a mano)</summary>
+      <div class="prueba">
+        <input id="manual" placeholder="Ej: M1PRY-104 o M1OP-CORTE">
+        <button class="btn" id="btn-manual">Enviar</button>
+      </div>
+      <p class="muted small">El código tiene que empezar con el prefijo de la pistola del operario (pestaña Operarios de la planilla).</p>
+    </details>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+let CFG = { operarios: [], operaciones: [] };
+let ESTADO = {};          // nombre -> { abierta, proyectoPendiente }
+let MSG = {};             // nombre -> { texto, clase }
+let offsetServidor = 0;   // diferencia reloj PC vs servidor
+
+const $ = id => document.getElementById(id);
+const norm = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
+
+function operarioPorPrefijo(codigo) {
+  const c = norm(codigo);
+  const cands = CFG.operarios.filter(o => o.prefijo && c.startsWith(o.prefijo)).sort((a, b) => b.prefijo.length - a.prefijo.length);
+  return cands[0] ? cands[0].nombre : null;
+}
+
+// ---------- Captura de las pistolas (funcionan como teclado) ----------
+const captura = $('captura');
+let buffer = '', timerBuf = null;
+function enfocar() { if (document.activeElement !== $('manual')) captura.focus({ preventScroll: true }); }
+function revisarFoco() { document.body.classList.toggle('sin-foco', !document.hasFocus()); }
+captura.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    terminarLectura();
+  }
+});
+captura.addEventListener('input', () => {
+  // Por si la pistola no manda Enter al final: si deja de llegar texto, se toma como lectura completa
+  clearTimeout(timerBuf);
+  timerBuf = setTimeout(terminarLectura, 400);
+});
+function terminarLectura() {
+  clearTimeout(timerBuf);
+  const txt = captura.value.trim();
+  captura.value = '';
+  if (txt.length >= 4) recibir(txt);
+}
+document.addEventListener('click', enfocar);
+window.addEventListener('focus', () => { revisarFoco(); enfocar(); });
+window.addEventListener('blur', revisarFoco);
+$('aviso-foco').addEventListener('click', () => { window.focus(); enfocar(); revisarFoco(); });
+setInterval(() => { enfocar(); revisarFoco(); }, 1500);
+
+$('btn-manual').addEventListener('click', () => { const v = $('manual').value.trim(); if (v) { recibir(v); $('manual').value = ''; } });
+$('manual').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-manual').click(); });
+
+// ---------- Cola y envío ----------
+const cola = crearCola('estacion_cola', onResultado, (n, sinRed) => {
+  const el = $('pendientes');
+  el.classList.toggle('hidden', !n);
+  el.className = 'pill warn' + (n ? '' : ' hidden');
+  el.textContent = `${n} lectura${n === 1 ? '' : 's'} sin enviar` + (sinRed ? ' (sin internet, se reintenta)' : '');
+  if (sinRed) setRed(false);
+});
+
+function recibir(codigo) {
+  const nombre = operarioPorPrefijo(codigo);
+  agregarLog(`${fmtHora(Date.now())} · ${codigo}${nombre ? ' (' + nombre + ')' : ''}`);
+  if (CFG.operarios.length && !nombre) {
+    Sonido.error();
+    mostrarMensajeGeneral(`No reconozco la pistola: "${codigo}". Revisá el prefijo en la pestaña Operarios.`);
+    // se manda igual: el servidor tiene la lista más nueva
+  } else if (nombre) {
+    setMsg(nombre, 'Enviando…', '');
+    Sonido.ok();
+  }
+  cola.agregar({ codigo, ts: Date.now() - offsetServidor, origen: 'PC' });
+}
+
+function onResultado(item, res) {
+  setRed(true);
+  const nombre = res.operario || operarioPorPrefijo(item.codigo);
+  if (!res.ok) {
+    Sonido.error();
+    if (nombre) setMsg(nombre, '✖ ' + res.error, 'error'); else mostrarMensajeGeneral('✖ ' + res.error);
+    return;
+  }
+  if (res.alerta) Sonido.alerta(); else if (res.tipo === 'cierre' || res.tipo === 'fin') Sonido.cierre(); else if (res.tipo === 'inicio') Sonido.inicio();
+  setMsg(nombre, (res.alerta ? '⚠ ' : '✔ ') + res.mensaje.replace(nombre + ': ', ''), res.alerta ? 'alerta' : 'ok');
+  refrescarEstado();
+}
+
+function setMsg(nombre, texto, clase) {
+  MSG[nombre] = { texto, clase, ts: Date.now() };
+  render();
+}
+function mostrarMensajeGeneral(t) { agregarLog('⚠ ' + t); }
+function agregarLog(t) {
+  const li = document.createElement('li'); li.textContent = t;
+  $('log').prepend(li);
+  while ($('log').children.length > 40) $('log').lastChild.remove();
+}
+function setRed(ok) {
+  const el = $('estado-red');
+  el.className = 'pill ' + (ok ? 'ok' : 'bad');
+  el.innerHTML = `<span class="dot"></span> ${ok ? 'Conectado' : 'Sin conexión'}`;
+}
+
+// ---------- Pantalla ----------
+function render() {
+  const ahora = Date.now() - offsetServidor;
+  $('grid').innerHTML = CFG.operarios.map(o => {
+    const e = ESTADO[o.nombre] || {};
+    const a = e.abierta;
+    const clase = !a ? 'libre' : (a.tipo === 'Pausa' ? 'pausa' : 'trabajando');
+    const m = MSG[o.nombre];
+    const flash = m && m.clase && Date.now() - m.ts < 2500 ? ' flash-' + m.clase : '';
+    return `<div class="op-card ${clase}${flash}" data-op="${esc(o.nombre)}">
+      <div class="nombre">${esc(o.nombre)} <span class="pill">pistola ${esc(o.prefijo)}</span></div>
+      <div class="actividad">${a ? esc(a.operacion) : 'Sin operación abierta'}</div>
+      <div class="proyecto">${a && a.proyecto ? 'Proyecto ' + esc(a.proyecto) + (a.cliente ? ' · ' + esc(a.cliente) : '') : (a && a.tipo !== 'Pausa' ? '<span style="color:var(--amber)">⚠ sin proyecto</span>' : '&nbsp;')}
+        ${e.proyectoPendiente ? `<br><span style="color:var(--blue)">Proyecto escaneado: ${esc(e.proyectoPendiente)} → falta la operación</span>` : ''}</div>
+      <div class="timer">${a ? fmtDur((ahora - a.inicio) / 60000) : '—'}</div>
+      <div class="msg ${m ? m.clase : ''}">${m ? esc(m.texto) : '&nbsp;'}</div>
+    </div>`;
+  }).join('');
+}
+
+async function cargarConfig() {
+  try {
+    const r = await Api.get('config');
+    if (!r.ok) throw new Error(r.error);
+    CFG = r;
+    offsetServidor = Date.now() - r.serverTs;
+    if (Math.abs(offsetServidor) < 2000) offsetServidor = 0;
+    setRed(true);
+    render();
+  } catch (e) {
+    setRed(false);
+    agregarLog('No se pudo leer la configuración: ' + e.message);
+  }
+}
+async function refrescarEstado() {
+  try {
+    const r = await Api.get('estado');
+    if (!r.ok) throw new Error(r.error);
+    ESTADO = {};
+    r.operarios.forEach(o => ESTADO[o.nombre] = o);
+    setRed(true);
+    render();
+  } catch (e) { setRed(false); }
+}
+
+setInterval(() => { $('reloj').textContent = new Date().toLocaleString('es-AR', { weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false }); render(); }, 1000);
+setInterval(refrescarEstado, APP_CONFIG.REFRESCO_SEG * 1000);
+setInterval(cargarConfig, 5 * 60 * 1000);
+(async () => { await cargarConfig(); await refrescarEstado(); cola.procesar(); enfocar(); })();
+</script>
+</body>
+</html>

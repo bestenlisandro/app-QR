@@ -1,79 +1,68 @@
-# Generación e Impresión de Códigos QR para la Hoja de Ruta
+# QR, pistolas y uso diario
 
-Herramienta: `webapp/generador-qr.html`. La usa Maximiliano cuando termina de
-diseñar/planificar un proyecto y necesita emitir la hoja de ruta física.
+## Qué tiene cada QR
 
-## Qué codifica cada QR
+| QR | Contenido | Dónde va |
+|---|---|---|
+| Operación | `OP-CORTE`, `OP-ARMADO`, `OP-ALMUERZO`, `OP-FIN`… | Cartel fijo en cada puesto (escuadradora, pegadora, múltiple, bancos, zona de carga…) y los de Descanso / Almuerzo / Pausa / Fin de jornada en un lugar común, por ejemplo junto al reloj o la salida. |
+| Proyecto | `PRY-104` | Hoja de ruta o carpeta que viaja con el trabajo. |
 
-Cada proyecto genera **7 QR, uno por operación**, con este contenido (texto
-plano JSON dentro del QR):
+Solo letras, números y un guion: así se leen bien aunque la pistola y la
+PC tengan distinto idioma de teclado.
 
-```json
-{"proyecto_id":"PRJ-104","operacion_id":"OP-03","operacion_nombre":"Corte (Escuadradora)"}
-```
+## Imprimir (Maxi)
 
-El escáner de la app del operario (`webapp/index.html`) lee ese JSON, arma la
-pantalla de confirmación y, al tocar "Iniciar Operación", crea el registro en
-`Registro_Tiempos`.
+Abrí `generador-qr.html`:
 
-## Paso a paso para Maximiliano
+1. **QR de operaciones** — se hace una sola vez.
+   - *Carteles grandes:* uno por hoja A4, para pegar en cada máquina.
+   - *Etiquetas:* 6 por hoja, si preferís algo más chico.
+2. **QR de proyectos** — cada vez que entra un trabajo: tildalo en la lista
+   (sale de la pestaña Proyectos) o escribí el ID → **Generar** → Imprimir.
 
-1. Asegurate de que el proyecto ya esté cargado por Daniel en la pestaña
-   `Proyectos` de la planilla (`Estado = Activo`).
-2. Abrí `webapp/generador-qr.html` desde la tablet/PC de Producción.
-3. Elegí el proyecto en el combo (o cargá el ID manualmente si todavía no
-   está en la planilla).
-4. Tocá **"Generar los 7 códigos QR"**. Vas a ver una grilla con las 7
-   tarjetas, una por operación, cada una con:
-   - El código QR.
-   - El nombre de la operación (ej. "OP-03 · Corte (Escuadradora)").
-   - El ID de proyecto y cliente.
-5. Tocá **"Imprimir / Guardar PDF"**. Se abre el diálogo de impresión del
-   navegador.
+Recomendaciones: imprimir en blanco y negro, plastificar o cubrir con cinta
+transparente los carteles de máquinas con polvo, y no achicar los QR por
+debajo de 3 × 3 cm.
 
-## Formato físico recomendado
+## Configurar el prefijo de cada pistola
 
-- **Tamaño mínimo del QR impreso: 2,5 × 2,5 cm.** Con el tamaño por defecto
-  de la herramienta (200×200 px) alcanza para imprimir en tamaño carta sin
-  perder legibilidad a la distancia de una mano.
-- **Papel:** usar hoja A4/carta común está bien para pegar en la hoja de
-  ruta de cartón/carpeta. Si el ambiente de la escuadradora o la pegadora es
-  polvoriento o húmedo, se recomienda:
-  - Plastificar cada recorte, o
-  - Usar papel adhesivo (etiquetas autoadhesivas) y cubrir con cinta
-    transparente ancha.
-- **Contraste:** imprimir siempre en blanco y negro puro (no escala de
-  grises tenue) para que la cámara de la tablet lo lea rápido con luz de
-  planta.
-- **Distribución en la hoja de ruta física:** una opción simple que funciona
-  bien en taller es recortar las 7 tarjetas y pegar cada una en la sección
-  correspondiente de la hoja de ruta de cartón/carpeta viajera del proyecto,
-  en el mismo orden del flujo:
+Las 3 pistolas escriben en la misma PC. Para saber quién leyó, cada pistola
+tiene que agregar un **prefijo** antes de lo que lee:
 
-  ```
-  [1. Descarga] → [2. Orden/Clasif.] → [3. Corte] → [4. Cantos]
-       → [5. Perforado] → [6. Armado] → [7. Carga]
-  ```
+| Operario | Prefijo | La pistola manda |
+|---|---|---|
+| Mariano | `M1` | `M1OP-CORTE` |
+| Emiliano | `E2` | `E2OP-CORTE` |
+| Gonzalo | `G3` | `G3OP-CORTE` |
 
-  Así, cada operario que recibe la carpeta escanea únicamente el QR de la
-  etapa que le corresponde a él en ese momento.
+Cómo se configura depende del modelo. En casi todas las pistolas es así:
 
-- **Duplicados:** si dos estaciones pueden trabajar la misma operación en
-  paralelo (por ejemplo, corte y pegado de cantos, que puede hacer
-  cualquiera de los 3 operarios), no hace falta un QR por estación: el QR
-  identifica la *operación*, no la máquina ni el operario — eso se define
-  al elegir el operario al principio de la app.
+1. En el manual, buscá la sección **"Prefix" / "Prefijo" / "Add prefix"**
+   ("Data editing" o "Edición de datos").
+2. Escaneá el código **"Agregar prefijo" / "Set prefix"**.
+3. Escaneá los caracteres del prefijo usando la **tabla ASCII** del manual
+   (para `M1`: la "M" y el "1").
+4. Escaneá **"Guardar" / "Save" / "End"**.
+5. Verificá que la pistola mande **Enter** al final (suele venir activado:
+   "Add Enter / CR suffix").
+6. Probá: con `estacion.html` abierta, leé un QR de operación con esa
+   pistola. Tiene que aparecer en la tarjeta del operario que corresponde.
 
-## Proyectos con servicio externo (Opción A)
+Si un modelo no permite prefijo, se puede usar otro prefijo que sí admita
+(por ejemplo, un solo carácter) y cambiarlo en la pestaña **Operarios** de
+la planilla. Los prefijos no pueden empezar con `OP` ni con `PRY`.
 
-Para proyectos donde el corte y pegado de cantos se hacen afuera, simplemente
-no se imprimen ni se escanean los QR de **OP-03 (Corte)** y **OP-04 (Pegado
-de cantos)** — el flujo interno arranca directo en **OP-05 (Procesado /
-Perforado)** o donde corresponda. El campo `Tipo_Servicio` de la pestaña
-`Proyectos` queda como referencia administrativa.
+**Etiquetá cada pistola con el nombre del operario.**
 
-## Reimpresión / corrección
+## Uso diario (para explicarle a los operarios)
 
-Si se necesita reimprimir el QR de una sola operación (se rompió, se manchó),
-no hace falta regenerar los 7: volvé a generar el proyecto en la herramienta
-y recortá solo la tarjeta que falta.
+1. **Empezar una tarea:** QR del **proyecto** → QR de la **operación**. Pitido doble.
+2. **Terminar:** QR de la **misma operación**. Si arranca otra tarea, no
+   hace falta terminar la anterior: se cierra sola.
+3. **Tareas generales** (descarga, acomodamiento o limpieza que no son de un
+   trabajo): solo el QR de la operación.
+4. **Descanso, almuerzo o pausa:** QR de la pausa. Al volver, proyecto + operación.
+5. **Al irse:** QR **Fin de jornada**.
+6. **Tres pitidos:** falta el proyecto. Se registró igual, pero conviene
+   escanear el proyecto y la operación de nuevo, o avisar a Maxi.
+7. **Pitido largo y grave:** la lectura no se entendió. Repetir.
