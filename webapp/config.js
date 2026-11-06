@@ -7,10 +7,10 @@
 // Lo único que va acá es la URL del backend (Apps Script publicado como
 // Aplicación web, termina en /exec). Ver docs/02-GUIA-DESPLIEGUE.md.
 const APP_CONFIG = {
-  // URL de la implementación existente. Si al pegar el Code.gs nuevo se edita
-  // ESA implementación (Administrar implementaciones > editar > Nueva versión),
-  // la URL no cambia. Si se crea una implementación nueva, pegar acá la nueva.
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxBkIEn9GGh8yRL4OUiMfOTZHeZo4IaHU4yC_ub1jqBCSdOtFkQbYM3bNRiUi_sfhtfFQ/exec',
+  // Implementación de la cuenta bestenlisandroglineur@gmail.com
+  // (planilla "Control de Produccion Taller"). Si se cambia Code.gs, usar
+  // Implementar > Administrar implementaciones > editar > Nueva versión: así la URL no cambia.
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyXh861OpjYcKIv5X4CHxGvLpRxzyOzlvBVypKZBRLNHhV93O3KUFUrWI09GDPrEsRZ/exec',
 
   // Cada cuántos segundos se refresca el estado en pantalla
   REFRESCO_SEG: 8
