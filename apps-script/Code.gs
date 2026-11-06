@@ -149,21 +149,25 @@ function buildReporte() {
   sh.getRange('D1').setValue('Cambiá las fechas amarillas y todo se recalcula. Valores en horas (no incluye operaciones abiertas).')
     .setFontStyle('italic').setFontColor('#666666');
 
-  var rango = 'Registro_Tiempos!A2:P';
-  function q(select, extra, tail) {
-    return '=IFERROR(QUERY(' + rango + ',"select ' + select +
-      ' where B >= date \'"&TEXT($B$1,"yyyy-mm-dd")&"\' and B <= date \'"&TEXT($B$2,"yyyy-mm-dd")&"\' and M <> \'Abierta\'' +
-      extra + ' ' + tail + '",0),"Sin datos en el período")';
+  // Separador de argumentos según la configuración regional de la planilla
+  // (español/portugués/etc. usan ";", inglés usa ","). Se filtra con FILTER en vez de
+  // TEXT(fecha) para no depender del formato de fecha del idioma.
+  var loc = String(ss.getSpreadsheetLocale() || 'es_AR');
+  var S = /^(en|ja|zh|ko|th|he|iw|hi)/i.test(loc) ? ',' : ';';
+  var R = 'Registro_Tiempos!';
+  function q(select, extraFiltro) {
+    return '=IFERROR(QUERY(FILTER(' + R + 'A2:P' + S + R + 'B2:B>=$B$1' + S + R + 'B2:B<=$B$2' + S + R + 'M2:M<>"Abierta"' +
+      (extraFiltro ? S + extraFiltro : '') + ')' + S + '"' + select + '"' + S + '0)' + S + '"Sin datos en el período")';
   }
 
   sh.getRange('A4').setValue('Horas por operario y operación').setFontWeight('bold');
-  sh.getRange('A5').setFormula(q('C, sum(L)', '', 'group by C pivot G'));
+  sh.getRange('A5').setFormula(q('select Col3, sum(Col12) group by Col3 pivot Col7'));
 
   sh.getRange('A22').setValue('Horas por proyecto y operación').setFontWeight('bold');
-  sh.getRange('A23').setFormula(q('D, sum(L)', " and D <> ''", 'group by D pivot G'));
+  sh.getRange('A23').setFormula(q('select Col4, sum(Col12) group by Col4 pivot Col7', R + 'D2:D<>""'));
 
   sh.getRange('A60').setValue('Horas por día y operario').setFontWeight('bold');
-  sh.getRange('A61').setFormula(q('B, sum(L)', '', "group by B pivot C format B 'dd/mm/yyyy'"));
+  sh.getRange('A61').setFormula(q("select Col2, sum(Col12) group by Col2 pivot Col3 format Col2 'dd/mm/yyyy'"));
 }
 
 function instalarTriggerCierre() {
