@@ -25,15 +25,16 @@ var SH_OPER = 'Operarios';
 var SH_OPS = 'Operaciones';
 var SH_CFG = 'Config';
 var SH_REP = 'Reporte';
+var SH_REC = 'Recursos';
 
 var REG_HEADERS = [
   'ID', 'Fecha', 'Operario', 'Proyecto', 'Cliente', 'Cod_Operacion', 'Operacion',
-  'Tipo', 'Inicio', 'Fin', 'Minutos', 'Horas', 'Estado', 'Observacion', 'Origen', 'Editado_por'
+  'Tipo', 'Inicio', 'Fin', 'Minutos', 'Horas', 'Estado', 'Observacion', 'Origen', 'Editado_por', 'Recurso'
 ];
 // Índices (0-based) de REG_HEADERS
 var C = {
   ID: 0, FECHA: 1, OPERARIO: 2, PROYECTO: 3, CLIENTE: 4, COD: 5, OPERACION: 6,
-  TIPO: 7, INICIO: 8, FIN: 9, MIN: 10, HORAS: 11, ESTADO: 12, OBS: 13, ORIGEN: 14, EDITADO: 15
+  TIPO: 7, INICIO: 8, FIN: 9, MIN: 10, HORAS: 11, ESTADO: 12, OBS: 13, ORIGEN: 14, EDITADO: 15, RECURSO: 16
 };
 
 // Tipos de operación
@@ -41,23 +42,41 @@ var C = {
 //   OPCIONAL : se carga al proyecto escaneado o, si no hubo, a "GENERAL" (tarea general del taller)
 //   PAUSA    : descanso / almuerzo / pausa, sin proyecto
 //   FIN      : fin de jornada (cierra lo abierto, no genera registro)
+// Recurso: máquina o puesto que ocupa la operación (para medir la capacidad utilizada).
+// Armado y Procesado sin múltiple tienen un código por banco: así se sabe en qué banco se trabajó.
 var OPERACIONES_DEFAULT = [
-  ['DESCARGA', 'Descarga de materiales', 'OPCIONAL'],
-  ['ACOMODO', 'Acomodamiento', 'OPCIONAL'],
-  ['CORTE', 'Corte', 'PROYECTO'],
-  ['PEGADO', 'Pegado de cantos', 'PROYECTO'],
-  ['PROCMULT', 'Procesado con múltiple', 'PROYECTO'],
-  ['PROCSIN', 'Procesado sin múltiple', 'PROYECTO'],
-  ['RANURADO', 'Ranurado', 'PROYECTO'],
-  ['ARMADO', 'Armado', 'PROYECTO'],
-  ['LIMPIEZA', 'Limpieza', 'OPCIONAL'],
-  ['EMBALAJE', 'Embalaje', 'PROYECTO'],
-  ['CARGA', 'Carga', 'PROYECTO'],
-  ['DESCANSO', 'Descanso', 'PAUSA'],
-  ['ALMUERZO', 'Almuerzo', 'PAUSA'],
-  ['PAUSA', 'Pausa', 'PAUSA'],
-  ['FIN', 'Fin de jornada', 'FIN']
+  ['DESCARGA', 'Descarga de materiales', 'OPCIONAL', ''],
+  ['ACOMODO', 'Acomodamiento', 'OPCIONAL', ''],
+  ['CORTE', 'Corte', 'PROYECTO', 'ESCUADRADORA'],
+  ['RANURADO', 'Ranurado', 'PROYECTO', 'ESCUADRADORA'],
+  ['PEGADO', 'Pegado de cantos', 'PROYECTO', 'PEGADORA'],
+  ['PROCMULT', 'Procesado con múltiple', 'PROYECTO', 'MULTIPLE'],
+  ['PROCSINB1', 'Procesado sin múltiple', 'PROYECTO', 'BANCO1'],
+  ['PROCSINB2', 'Procesado sin múltiple', 'PROYECTO', 'BANCO2'],
+  ['ARMADOB1', 'Armado', 'PROYECTO', 'BANCO1'],
+  ['ARMADOB2', 'Armado', 'PROYECTO', 'BANCO2'],
+  ['LIMPIEZA', 'Limpieza', 'OPCIONAL', ''],
+  ['EMBALAJE', 'Embalaje', 'PROYECTO', ''],
+  ['CARGA', 'Carga', 'PROYECTO', ''],
+  ['DESCANSO', 'Descanso', 'PAUSA', ''],
+  ['ALMUERZO', 'Almuerzo', 'PAUSA', ''],
+  ['PAUSA', 'Pausa', 'PAUSA', ''],
+  ['FIN', 'Fin de jornada', 'FIN', '']
 ];
+var OPS_HEADERS = ['Codigo', 'Nombre', 'Tipo', 'Orden', 'Activa', 'Recurso'];
+function opsDefaultRows() {
+  return OPERACIONES_DEFAULT.map(function (o, i) { return [o[0], o[1], o[2], i + 1, 'SI', o[3]]; });
+}
+
+// Foto: ruta de la imagen dentro de la web app (carpeta webapp/img/recursos) o una URL completa.
+var RECURSOS_DEFAULT = [
+  ['ESCUADRADORA', 'Escuadradora', 'img/recursos/escuadradora.jpg'],
+  ['PEGADORA', 'Pegadora de cantos', 'img/recursos/pegadora.jpg'],
+  ['MULTIPLE', 'Múltiple', 'img/recursos/multiple.jpg'],
+  ['BANCO1', 'Banco de trabajo 1', 'img/recursos/banco1.jpg'],
+  ['BANCO2', 'Banco de trabajo 2', 'img/recursos/banco2.jpg']
+];
+var REC_HEADERS = ['Codigo', 'Nombre', 'Foto', 'Orden', 'Activo'];
 
 var OPERARIOS_DEFAULT = [
   ['Mariano', 'M1'],
@@ -68,7 +87,9 @@ var OPERARIOS_DEFAULT = [
 var CONFIG_DEFAULT = [
   ['ADMIN_PIN', '1234', 'PIN para correcciones en el dashboard (Maxi, Daniel, Lisandro). CAMBIARLO.'],
   ['HORA_CIERRE', 19, 'Hora (0-23) en que se cierran solas las operaciones que quedaron abiertas.'],
-  ['VENTANA_PROYECTO_MIN', 15, 'Minutos que "vale" el QR de proyecto escaneado antes de la operación.']
+  ['VENTANA_PROYECTO_MIN', 15, 'Minutos que "vale" el QR de proyecto escaneado antes de la operación.'],
+  ['HORAS_DISPONIBLES_DIA', 7.75, 'Horas de trabajo por día para calcular la capacidad (8:30 a 17 menos 45 min de almuerzo = 7,75).'],
+  ['FERIADOS', '', 'Días no laborables de lunes a viernes, separados por coma (ej. 24/12/2026, 25/12/2026). Si alguien ficha ese día, cuenta igual.']
 ];
 
 var PROYECTO_GENERAL = 'GENERAL';
@@ -114,8 +135,7 @@ function setupHojas() {
   var ss = getSS();
   ss.setSpreadsheetTimeZone(TZ_DEFAULT);
 
-  var opsRows = OPERACIONES_DEFAULT.map(function (o, i) { return [o[0], o[1], o[2], i + 1, 'SI']; });
-  ensureSheet(SH_OPS, ['Codigo', 'Nombre', 'Tipo', 'Orden', 'Activa'], opsRows);
+  ensureSheet(SH_OPS, OPS_HEADERS, opsDefaultRows());
   ensureSheet(SH_OPER, ['Nombre', 'Prefijo_Pistola', 'Activo'], OPERARIOS_DEFAULT.map(function (o) { return [o[0], o[1], 'SI']; }));
   ensureSheet(SH_PROY, ['ID_Proyecto', 'Cliente', 'Descripcion', 'Estado', 'Fecha_Inicio', 'Fecha_Entrega'],
     [['104', 'Cliente de ejemplo', 'Fila de ejemplo, se puede borrar', 'Activo', new Date(), '']]);
@@ -126,6 +146,7 @@ function setupHojas() {
   reg.getRange('I:J').setNumberFormat('dd/mm/yyyy hh:mm');
   reg.getRange('K:L').setNumberFormat('0.00');
 
+  actualizarRecursos();
   buildReporte();
 
   var hoja1 = ss.getSheetByName('Hoja 1') || ss.getSheetByName('Sheet1');
@@ -133,6 +154,83 @@ function setupHojas() {
 
   instalarTriggerCierre();
   try { ss.toast('Listo: hojas creadas y cierre automático programado.'); } catch (e) {}
+}
+
+/**
+ * Agrega recursos (máquinas y bancos) a una planilla ya instalada. Se puede ejecutar
+ * varias veces sin duplicar nada. setupHojas() la llama sola.
+ */
+function actualizarRecursos() {
+  var ss = getSS();
+
+  // 1) Hoja Recursos
+  ensureSheet(SH_REC, REC_HEADERS, RECURSOS_DEFAULT.map(function (r, i) { return [r[0], r[1], r[2], i + 1, 'SI']; }));
+
+  // 2) Operaciones: columna Recurso, operaciones por banco y desactivar Armado / Procesado sin múltiple genéricos
+  var ops = ss.getSheetByName(SH_OPS);
+  var defs = {};
+  OPERACIONES_DEFAULT.forEach(function (o, i) { defs[o[0]] = { fila: [o[0], o[1], o[2], i + 1, 'SI', o[3]], orden: i + 1 }; });
+  if (String(ops.getRange(1, 6).getValue()).trim() !== 'Recurso') {
+    ops.getRange(1, 6).setValue('Recurso').setFontWeight('bold').setBackground('#1e2226').setFontColor('#ffffff');
+  }
+  var n = ops.getLastRow() - 1;
+  var datos = n > 0 ? ops.getRange(2, 1, n, 6).getValues() : [];
+  var vistos = {};
+  datos.forEach(function (r) {
+    var cod = norm(r[0]);
+    vistos[cod] = true;
+    if (defs[cod]) {
+      if (!r[5]) r[5] = defs[cod].fila[5];
+      r[3] = defs[cod].orden;
+    }
+    if (cod === 'ARMADO' || cod === 'PROCSIN') { r[4] = 'NO'; r[3] = 90; }
+  });
+  OPERACIONES_DEFAULT.forEach(function (o) { if (!vistos[o[0]]) datos.push(defs[o[0]].fila); });
+  datos.sort(function (a, b) { return (Number(a[3]) || 99) - (Number(b[3]) || 99); });
+  if (datos.length) ops.getRange(2, 1, datos.length, 6).setValues(datos);
+
+  // 3) Config: claves nuevas
+  var cfg = ss.getSheetByName(SH_CFG);
+  var claves = {};
+  readTable(SH_CFG).forEach(function (r) { claves[String(r[0]).trim()] = true; });
+  CONFIG_DEFAULT.forEach(function (r) { if (!claves[r[0]]) cfg.appendRow(r); });
+
+  // 4) Registro_Tiempos: columna Recurso (y completar registros viejos)
+  var reg = ss.getSheetByName(SH_REG);
+  if (reg) {
+    if (String(reg.getRange(1, REG_HEADERS.length).getValue()).trim() !== 'Recurso') {
+      reg.getRange(1, REG_HEADERS.length).setValue('Recurso').setFontWeight('bold').setBackground('#1e2226').setFontColor('#ffffff');
+    }
+    var nr = reg.getLastRow() - 1;
+    if (nr > 0) {
+      var mapa = {};
+      getOperaciones().forEach(function (o) { mapa[o.codigo] = o.recurso; });
+      var cods = reg.getRange(2, C.COD + 1, nr, 1).getValues();
+      var recs = reg.getRange(2, C.RECURSO + 1, nr, 1).getValues();
+      var cambio = false;
+      for (var i = 0; i < nr; i++) {
+        if (!recs[i][0] && mapa[norm(cods[i][0])]) { recs[i][0] = mapa[norm(cods[i][0])]; cambio = true; }
+      }
+      if (cambio) reg.getRange(2, C.RECURSO + 1, nr, 1).setValues(recs);
+    }
+  }
+}
+
+function getRecursos() {
+  var rows = readTable(SH_REC);
+  if (!rows.length) rows = RECURSOS_DEFAULT.map(function (r, i) { return [r[0], r[1], r[2], i + 1, 'SI']; });
+  return rows.filter(function (r) { return r[0] && esSi(r[4]); }).map(function (r) {
+    return { codigo: norm(r[0]), nombre: String(r[1]), foto: String(r[2] || ''), orden: Number(r[3]) || 99 };
+  }).sort(function (a, b) { return a.orden - b.orden; });
+}
+
+function getFeriados() {
+  var v = getConfig().FERIADOS;
+  if (v instanceof Date) return [Utilities.formatDate(v, tz(), 'yyyy-MM-dd')];
+  return String(v || '').split(/[,;\n]+/).map(function (t) {
+    var m = t.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : null;
+  }).filter(Boolean);
 }
 
 function buildReporte() {
@@ -208,9 +306,9 @@ function getConfig() {
 
 function getOperaciones() {
   var rows = readTable(SH_OPS);
-  if (!rows.length) rows = OPERACIONES_DEFAULT.map(function (o, i) { return [o[0], o[1], o[2], i + 1, 'SI']; });
+  if (!rows.length) rows = opsDefaultRows();
   return rows.filter(function (r) { return r[0] && esSi(r[4]); }).map(function (r) {
-    return { codigo: norm(r[0]), nombre: String(r[1]), tipo: String(r[2] || 'PROYECTO').trim().toUpperCase(), orden: Number(r[3]) || 99 };
+    return { codigo: norm(r[0]), nombre: String(r[1]), tipo: String(r[2] || 'PROYECTO').trim().toUpperCase(), orden: Number(r[3]) || 99, recurso: norm(r[5] || '') };
   }).sort(function (a, b) { return a.orden - b.orden; });
 }
 
@@ -279,7 +377,10 @@ function apiConfig() {
     operarios: getOperarios(),
     operaciones: getOperaciones(),
     proyectos: getProyectos(true),
+    recursos: getRecursos(),
     ventanaProyectoMin: Number(getConfig().VENTANA_PROYECTO_MIN) || 15,
+    horasDisponiblesDia: Number(String(getConfig().HORAS_DISPONIBLES_DIA).replace(',', '.')) || 7.75,
+    feriados: getFeriados(),
     serverTs: Date.now()
   };
 }
@@ -352,6 +453,7 @@ function abrirRegistro(o) {
   row[C.ESTADO] = 'Abierta';
   row[C.OBS] = o.obs || '';
   row[C.ORIGEN] = o.origen || '';
+  row[C.RECURSO] = o.op.recurso || '';
   regSheet().appendRow(row);
   return row;
 }
@@ -483,7 +585,7 @@ function apiScan(body) {
 
   return {
     ok: true, tipo: 'inicio', operario: operario, alerta: alerta,
-    mensaje: operario + ': empezó ' + op.nombre + (proyecto ? ' · ' + proyecto : '') +
+    mensaje: operario + ': empezó ' + op.nombre + (/^BANCO\d/.test(op.recurso || '') ? ' (Banco ' + op.recurso.slice(5) + ')' : '') + (proyecto ? ' · ' + proyecto : '') +
       (alerta ? ' — SIN PROYECTO (escaneá primero el QR del proyecto)' : '') + cerroAnterior
   };
 }
@@ -542,7 +644,7 @@ function rowToObj(r, rowNum) {
     cod: r[C.COD], operacion: r[C.OPERACION], tipo: r[C.TIPO],
     inicio: ini ? ini.getTime() : null, fin: fin ? fin.getTime() : null,
     minutos: r[C.MIN] === '' ? null : Number(r[C.MIN]),
-    estado: r[C.ESTADO], obs: r[C.OBS], origen: r[C.ORIGEN], editado: r[C.EDITADO]
+    estado: r[C.ESTADO], obs: r[C.OBS], origen: r[C.ORIGEN], editado: r[C.EDITADO], recurso: r[C.RECURSO] || ''
   };
 }
 
@@ -642,7 +744,7 @@ function apiAdmin(body) {
     if (ch.cod) {
       var nop = opPorCod(ch.cod);
       if (!nop || nop.tipo === 'FIN') return { ok: false, error: 'Operación inválida' };
-      r[C.COD] = nop.codigo; r[C.OPERACION] = nop.nombre;
+      r[C.COD] = nop.codigo; r[C.OPERACION] = nop.nombre; r[C.RECURSO] = nop.recurso || '';
       if (nop.tipo === 'PAUSA') { r[C.PROYECTO] = ''; r[C.CLIENTE] = ''; }
     }
     if (ch.proyecto !== undefined) { r[C.PROYECTO] = ch.proyecto; r[C.CLIENTE] = clienteDe(ch.proyecto); }

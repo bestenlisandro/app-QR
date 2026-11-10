@@ -112,7 +112,7 @@ function renderEstado() {
   card.className = 'op-card estado-actual ' + (!a ? 'libre' : a.tipo === 'Pausa' ? 'pausa' : 'trabajando');
   card.innerHTML = `
     <div class="nombre">${esc(operario)}</div>
-    <div class="actividad">${a ? esc(a.operacion) : 'Sin operación abierta'}</div>
+    <div class="actividad">${a ? esc(opConBanco(a)) : 'Sin operación abierta'}</div>
     <div class="proyecto">${a && a.proyecto ? 'Proyecto ' + esc(a.proyecto) : '&nbsp;'}
       ${estado && estado.proyectoPendiente ? `<br><span style="color:var(--blue)">Proyecto ${esc(estado.proyectoPendiente)} escaneado → ahora la operación</span>` : ''}</div>
     <div class="timer">${a ? fmtDur((Date.now() - a.inicio) / 60000) : '—'}</div>`;

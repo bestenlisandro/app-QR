@@ -160,7 +160,7 @@ function render() {
     const flash = m && m.clase && Date.now() - m.ts < 2500 ? ' flash-' + m.clase : '';
     return `<div class="op-card ${clase}${flash}" data-op="${esc(o.nombre)}">
       <div class="nombre">${esc(o.nombre)} <span class="pill">pistola ${esc(o.prefijo)}</span></div>
-      <div class="actividad">${a ? esc(a.operacion) : 'Sin operación abierta'}</div>
+      <div class="actividad">${a ? esc(opConBanco(a)) : 'Sin operación abierta'}</div>
       <div class="proyecto">${a && a.proyecto ? 'Proyecto ' + esc(a.proyecto) + (a.cliente ? ' · ' + esc(a.cliente) : '') : (a && a.tipo !== 'Pausa' ? '<span style="color:var(--amber)">⚠ sin proyecto</span>' : '&nbsp;')}
         ${e.proyectoPendiente ? `<br><span style="color:var(--blue)">Proyecto escaneado: ${esc(e.proyectoPendiente)} → falta la operación</span>` : ''}</div>
       <div class="timer">${a ? fmtDur((ahora - a.inicio) / 60000) : '—'}</div>

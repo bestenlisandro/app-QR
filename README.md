@@ -13,6 +13,7 @@ dashboard desde cualquier celular o PC.
 - **Operaciones:** Descarga de materiales · Acomodamiento · Corte · Pegado de
   cantos · Procesado con múltiple · Procesado sin múltiple · Ranurado ·
   Armado · Limpieza · Embalaje · Carga.
+- **Recursos (capacidad):** Escuadradora (Corte, Ranurado) · Pegadora (Pegado de cantos) · Múltiple (Procesado con múltiple) · Banco 1 y Banco 2 (Armado, Procesado sin múltiple; cada banco con sus carteles QR).
 - **Pausas:** Descanso · Almuerzo · Pausa. **Fin de jornada** cierra todo.
 - Descarga, Acomodamiento y Limpieza pueden ser de un proyecto o **tareas
   generales** del taller (si no se escaneó proyecto, van a `GENERAL`).
@@ -23,7 +24,7 @@ dashboard desde cualquier celular o PC.
 |---|---|---|
 | `webapp/estacion.html` | PC compartida del taller | Recibe las 3 pistolas. Reconoce a cada operario por el **prefijo** de su pistola y muestra qué está haciendo cada uno. Si se corta internet, guarda las lecturas y las manda después. |
 | `webapp/index.html` | Celular del operario | Alternativa a la pistola: escanea con la cámara. |
-| `webapp/dashboard.html` | Maxi, Daniel, Lisandro | **Ahora** (qué hace cada uno y desde cuándo), **Reporte por período** (horas y % por operario, operación, proyecto y día; descarga a Excel) y **Correcciones** con PIN. |
+| `webapp/dashboard.html` | Maxi, Daniel, Lisandro | **Ahora** (qué hace cada uno y desde cuándo), **Máquinas** (foto y % de capacidad utilizada de escuadradora, pegadora, múltiple y bancos, cuello de botella, uso día por día y por hora), **Reporte por período** (horas y % por operario, operación, proyecto y día; descarga a Excel) y **Correcciones** con PIN. |
 | `webapp/generador-qr.html` | Maxi | Imprime los carteles de operaciones (una vez) y los QR de cada proyecto. |
 
 ## Cómo funciona un escaneo

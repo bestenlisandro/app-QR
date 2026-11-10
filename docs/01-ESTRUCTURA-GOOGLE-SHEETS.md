@@ -30,6 +30,7 @@ Config** se puede editar directo en la planilla: las pantallas lo leen solas
 | N | Observacion | Marcas a revisar: "Sin proyecto – revisar", "Quedó abierta – revisar hora de fin", "Proyecto no cargado en la lista – revisar" |
 | O | Origen | `PC`, `Celular` o `Corrección` |
 | P | Editado_por | Quién corrigió y cuándo |
+| Q | Recurso | Máquina o banco que ocupó (ESCUADRADORA, PEGADORA, MULTIPLE, BANCO1, BANCO2) |
 
 Se puede editar a mano, pero es mejor corregir desde el dashboard
 (pestaña **Registros y correcciones**): recalcula minutos y horas y deja
@@ -62,6 +63,25 @@ registrado quién corrigió.
 | Tipo | `PROYECTO` (requiere proyecto), `OPCIONAL` (proyecto o GENERAL), `PAUSA`, `FIN` |
 | Orden | Orden de las columnas en los reportes |
 | Activa | `SI` / `NO` |
+| Recurso | Máquina o banco que ocupa (código de la pestaña Recursos). Vacío = no ocupa ninguno. |
+
+Armado y Procesado sin múltiple tienen un código por banco (`ARMADOB1`, `ARMADOB2`,
+`PROCSINB1`, `PROCSINB2`), con su propio cartel QR en cada banco.
+
+## `Recursos`
+
+Máquinas y puestos cuya capacidad se mide en la pestaña **Máquinas** del dashboard.
+
+| Columna | Descripción |
+|---|---|
+| Codigo | ESCUADRADORA, PEGADORA, MULTIPLE, BANCO1, BANCO2 |
+| Nombre | Como se ve en el dashboard |
+| Foto | Ruta de la foto (`img/recursos/…jpg`, ver `webapp/img/recursos/LEEME.md`) o una URL |
+| Orden / Activo | Orden de las tarjetas / `SI` o `NO` |
+
+**Cómo se calcula el % de uso:** horas de máquina ÷ horas disponibles.
+- Horas de máquina: tiempo en que alguien la estuvo usando. Si dos personas la usan a la vez, cuenta una sola vez.
+- Horas disponibles: `HORAS_DISPONIBLES_DIA` por cada día de lunes a viernes que no sea feriado. Sábados, domingos y feriados suman solo si alguien fichó ese día. El día de hoy cuenta desde el primer fichaje hasta ahora.
 
 ## `Config`
 
@@ -70,6 +90,8 @@ registrado quién corrigió.
 | ADMIN_PIN | 1234 | PIN de correcciones. **Cambiarlo.** |
 | HORA_CIERRE | 19 | Hora del cierre automático. Si se cambia, volver a ejecutar `setupHojas()` para reprogramarlo. |
 | VENTANA_PROYECTO_MIN | 15 | Minutos que vale el QR de proyecto antes de escanear la operación. |
+| HORAS_DISPONIBLES_DIA | 7,75 | Horas de trabajo por día para la capacidad (8:30 a 17 menos 45 min de almuerzo). |
+| FERIADOS | (vacío) | Días no laborables de lunes a viernes, separados por coma: `24/12/2026, 25/12/2026`. |
 
 ## `Reporte`
 

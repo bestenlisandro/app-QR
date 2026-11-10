@@ -99,6 +99,11 @@ function hoyISO(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function fmtPct(v) { return (Number(v) || 0).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %'; }
+// "Armado" + recurso BANCO1 -> "Armado · Banco 1"
+function opConBanco(r) {
+  const m = /^BANCO(\d+)$/.exec(r && r.recurso || '');
+  return (r && r.operacion || '') + (m ? ' · Banco ' + m[1] : '');
+}
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function minutosDe(r, ahora = Date.now()) {
   if (r.minutos !== null && r.minutos !== undefined && r.estado !== 'Abierta') return Number(r.minutos);

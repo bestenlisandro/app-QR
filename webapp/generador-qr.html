@@ -20,6 +20,8 @@
   .etq { border: 1.5px dashed #999; border-radius: 4mm; padding: 5mm; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2mm; break-inside: avoid; }
   .etq .qr img, .etq .qr canvas { display: block; margin: 0 auto; }
   .etq .t1 { font-size: 20pt; font-weight: 800; line-height: 1.1; }
+  .etq .t1b { font-size: 14pt; font-weight: 800; background: #000; color: #fff; padding: 1mm 4mm; border-radius: 2mm; }
+  .g1 .etq .t1b { font-size: 26pt; }
   .etq .t2 { font-size: 11pt; color: #333; }
   .etq .cod { font-family: monospace; font-size: 9pt; color: #666; }
   .etq .tag { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 1mm 3mm; border-radius: 2mm; border: 1px solid #000; }
@@ -86,7 +88,7 @@ function render(etiquetas, porHoja) {
     etiquetas.slice(i, i + porHoja).forEach(e => {
       const d = document.createElement('div');
       d.className = 'etq';
-      d.innerHTML = `<span class="tag">${esc(e.tag)}</span><div class="qr"></div><div class="t1">${esc(e.t1)}</div><div class="t2">${esc(e.t2 || '')}</div><div class="cod">${esc(e.codigo)}</div>`;
+      d.innerHTML = `<span class="tag">${esc(e.tag)}</span><div class="qr"></div><div class="t1">${esc(e.t1)}</div>${e.t1b ? `<div class="t1b">${esc(e.t1b)}</div>` : ''}<div class="t2">${esc(e.t2 || '')}</div><div class="cod">${esc(e.codigo)}</div>`;
       hoja.appendChild(d);
       const size = porHoja === 1 ? 420 : 150;
       new QRCode(d.querySelector('.qr'), { text: e.codigo, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
@@ -98,15 +100,21 @@ function render(etiquetas, porHoja) {
 }
 
 // Lista por defecto (la misma que crea setupHojas) por si no hay conexión con la planilla
-const OPS_DEFAULT = [['DESCARGA','Descarga de materiales','OPCIONAL'],['ACOMODO','Acomodamiento','OPCIONAL'],['CORTE','Corte','PROYECTO'],['PEGADO','Pegado de cantos','PROYECTO'],['PROCMULT','Procesado con múltiple','PROYECTO'],['PROCSIN','Procesado sin múltiple','PROYECTO'],['RANURADO','Ranurado','PROYECTO'],['ARMADO','Armado','PROYECTO'],['LIMPIEZA','Limpieza','OPCIONAL'],['EMBALAJE','Embalaje','PROYECTO'],['CARGA','Carga','PROYECTO'],['DESCANSO','Descanso','PAUSA'],['ALMUERZO','Almuerzo','PAUSA'],['PAUSA','Pausa','PAUSA'],['FIN','Fin de jornada','FIN']]
-  .map(([codigo, nombre, tipo]) => ({ codigo, nombre, tipo }));
+const OPS_DEFAULT = [['DESCARGA','Descarga de materiales','OPCIONAL',''],['ACOMODO','Acomodamiento','OPCIONAL',''],['CORTE','Corte','PROYECTO','ESCUADRADORA'],['RANURADO','Ranurado','PROYECTO','ESCUADRADORA'],['PEGADO','Pegado de cantos','PROYECTO','PEGADORA'],['PROCMULT','Procesado con múltiple','PROYECTO','MULTIPLE'],['PROCSINB1','Procesado sin múltiple','PROYECTO','BANCO1'],['PROCSINB2','Procesado sin múltiple','PROYECTO','BANCO2'],['ARMADOB1','Armado','PROYECTO','BANCO1'],['ARMADOB2','Armado','PROYECTO','BANCO2'],['LIMPIEZA','Limpieza','OPCIONAL',''],['EMBALAJE','Embalaje','PROYECTO',''],['CARGA','Carga','PROYECTO',''],['DESCANSO','Descanso','PAUSA',''],['ALMUERZO','Almuerzo','PAUSA',''],['PAUSA','Pausa','PAUSA',''],['FIN','Fin de jornada','FIN','']]
+  .map(([codigo, nombre, tipo, recurso]) => ({ codigo, nombre, tipo, recurso }));
+const REC_DEFAULT = { ESCUADRADORA: 'Escuadradora', PEGADORA: 'Pegadora de cantos', MULTIPLE: 'Múltiple', BANCO1: 'Banco de trabajo 1', BANCO2: 'Banco de trabajo 2' };
+function nombreRecurso(cod) {
+  const r = (CFG.recursos || []).find(x => x.codigo === cod);
+  return r ? r.nombre : (REC_DEFAULT[cod] || cod);
+}
 
 function etiquetasOps() {
   return (CFG.operaciones.length ? CFG.operaciones : OPS_DEFAULT).map(o => ({
     codigo: 'OP-' + o.codigo,
     t1: o.nombre,
+    t1b: o.recurso && /^BANCO/.test(o.recurso) ? nombreRecurso(o.recurso) : '',
     t2: o.tipo === 'PAUSA' ? 'Escanear al empezar y al volver' : o.tipo === 'FIN' ? 'Escanear al irse' : o.tipo === 'OPCIONAL' ? 'Proyecto opcional · escanear al empezar y al terminar' : 'Escanear primero el proyecto · al terminar, de nuevo este',
-    tag: TIPO_TXT[o.tipo] || 'Operación'
+    tag: o.recurso && !/^BANCO/.test(o.recurso) ? nombreRecurso(o.recurso) : (TIPO_TXT[o.tipo] || 'Operación')
   }));
 }
 

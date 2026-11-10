@@ -28,6 +28,30 @@
   .barra { height: 8px; border-radius: 4px; background: var(--amber); display: inline-block; vertical-align: middle; margin-left: 8px; }
   td.estado-Abierta { color: var(--green); }
   td.estado-Cierre { color: var(--amber); }
+  /* ---- Máquinas ---- */
+  .maq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .maq-card { background: var(--panel); border: 2px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+  .maq-card.alto { border-color: #7a2c25; }
+  .maq-card.medio { border-color: #2a6b47; }
+  .maq-foto { position: relative; aspect-ratio: 16 / 9; background: var(--panel-2); overflow: hidden; }
+  .maq-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .maq-foto .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--dim); font-size: .8rem; background: repeating-linear-gradient(45deg, var(--panel-2), var(--panel-2) 12px, #2a3036 12px, #2a3036 24px); }
+  .maq-foto .ph svg { width: 54px; height: 54px; opacity: .7; }
+  .maq-foto .vivo { position: absolute; left: 10px; top: 10px; }
+  .maq-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .maq-nombre { font-size: 1.15rem; font-weight: 800; }
+  .maq-pct { font-size: 2.2rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .maq-pct.bajo { color: var(--dim); } .maq-pct.medio { color: var(--green); } .maq-pct.alto { color: var(--red); }
+  .barra-uso { height: 10px; border-radius: 5px; background: var(--panel-2); overflow: hidden; position: relative; }
+  .barra-uso span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
+  .barra-uso .m50, .barra-uso .m85 { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--bg); }
+  .maq-ops { font-size: .82rem; color: var(--dim); }
+  .maq-ops b { color: var(--text); font-weight: 600; }
+  .leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--dim); }
+  .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .heat td { text-align: center; font-size: .78rem; min-width: 44px; }
+  .heat td:first-child { text-align: left; font-size: .9rem; }
+  .chart-wrap { position: relative; height: 300px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
 </style>
 </head>
 <body>
@@ -38,6 +62,7 @@
   </div>
   <nav class="tabs" style="width:100%">
     <button class="tab active" data-tab="ahora">Ahora</button>
+    <button class="tab" data-tab="maquinas">Máquinas</button>
     <button class="tab" data-tab="reporte">Reporte por período</button>
     <button class="tab" data-tab="registros">Registros y correcciones</button>
   </nav>
@@ -54,6 +79,41 @@
     <div class="bloque">
       <h2>Hoy · lo que hizo cada uno</h2>
       <div class="ops-grid" id="lineas-hoy"></div>
+    </div>
+  </section>
+
+  <!-- ============ MÁQUINAS ============ -->
+  <section class="tabp" id="tab-maquinas">
+    <div class="card">
+      <div class="row">
+        <div><label>Desde</label><input type="date" id="m-desde"></div>
+        <div><label>Hasta</label><input type="date" id="m-hasta"></div>
+        <div><label>Período rápido</label>
+          <select id="m-preset">
+            <option value="">—</option><option value="hoy">Hoy</option><option value="ayer">Ayer</option>
+            <option value="semana">Esta semana</option><option value="mes">Este mes</option><option value="mesant">Mes anterior</option>
+          </select></div>
+        <button class="btn primary" id="btn-maq">Ver</button>
+      </div>
+      <div class="leyenda" style="margin-top:12px">
+        <span><i style="background:var(--dim)"></i>Menos de 50 %: poco uso</span>
+        <span><i style="background:var(--green)"></i>50 a 85 %: uso normal</span>
+        <span><i style="background:var(--red)"></i>Más de 85 %: cuello de botella</span>
+      </div>
+      <p class="muted small" id="maq-capacidad" style="margin:10px 0 0"></p>
+    </div>
+    <div class="bloque maq-grid" id="maq-cards"></div>
+    <div class="bloque">
+      <h2>Ranking · ¿dónde está el cuello de botella?</h2>
+      <div class="tabla-wrap" id="maq-ranking"></div>
+    </div>
+    <div class="bloque" id="maq-bloque-dias">
+      <h2>Uso día por día</h2>
+      <div class="chart-wrap"><canvas id="maq-chart"></canvas></div>
+    </div>
+    <div class="bloque">
+      <h2>Uso por hora del día <span class="muted small">(promedio de los días con actividad)</span></h2>
+      <div class="tabla-wrap" id="maq-heat"></div>
     </div>
   </section>
 
@@ -109,6 +169,7 @@
 
 <script src="config.js"></script>
 <script src="api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let CFG = { operarios: [], operaciones: [], proyectos: [] };
@@ -178,7 +239,7 @@ function renderAhora() {
     const ult = o.ultimo && !a ? `Último: ${esc(o.ultimo.operacion)} · terminó ${fmtHora(o.ultimo.fin)} ${o.ultimo.fecha !== hoyISO() ? '(' + fmtFecha(o.ultimo.fin) + ')' : ''}` : '';
     return `<div class="op-card ${clase}">
       <div class="nombre">${esc(o.nombre)} <span class="pill ${a ? (a.tipo === 'Pausa' ? 'warn' : 'ok') : ''}">${a ? (a.tipo === 'Pausa' ? 'En pausa' : 'Trabajando') : 'Sin actividad'}</span></div>
-      <div class="actividad">${a ? esc(a.operacion) : '—'}</div>
+      <div class="actividad">${a ? esc(opConBanco(a)) : '—'}</div>
       <div class="proyecto">${a ? (a.proyecto ? 'Proyecto ' + esc(a.proyecto) + (a.cliente ? ' · ' + esc(a.cliente) : '') : (a.tipo === 'Pausa' ? '' : '<span class="rev">⚠ sin proyecto</span>')) : ult}
         ${a ? `<br><span class="muted small">desde las ${fmtHora(a.inicio)}</span>` : ''}</div>
       <div class="timer">${a ? fmtDur((ahora - a.inicio) / 60000) : '—'}</div>
@@ -191,7 +252,7 @@ function renderAhora() {
     const rs = prod.filter(r => r.operario === o.nombre).sort((a, b) => a.inicio - b.inicio);
     return `<div class="card"><h3>${esc(o.nombre)}</h3>${rs.length ? rs.map(r => `<div class="linea">
         <span class="h">${fmtHora(r.inicio)}–${r.estado === 'Abierta' ? 'ahora' : fmtHora(r.fin)}</span>
-        <span>${esc(r.operacion)}${r.proyecto ? ' · <span class="muted">' + esc(r.proyecto) + '</span>' : ''}${r.obs ? `<br><span class="rev">${esc(r.obs)}</span>` : ''}</span>
+        <span>${esc(opConBanco(r))}${r.proyecto ? ' · <span class="muted">' + esc(r.proyecto) + '</span>' : ''}${r.obs ? `<br><span class="rev">${esc(r.obs)}</span>` : ''}</span>
         <span class="d">${fmtDur(minutosDe(r))}</span></div>`).join('') : '<p class="muted small">Sin registros hoy.</p>'}</div>`;
   }).join('');
 }
@@ -204,6 +265,175 @@ async function refrescarEstado() {
     renderAhora();
   } catch (e) { setRed(false); }
 }
+
+// ---------- MÁQUINAS (capacidad utilizada) ----------
+const COLOR_REC = ['#4aa3df', '#ffb020', '#a78bfa', '#2ecc71', '#f472b6', '#2dd4bf', '#f97316'];
+let REGM = [], REGM_TS = 0, chartMaq = null;
+const HORAS_HEAT = Array.from({ length: 15 }, (_, i) => i + 6); // 6 a 20 h
+
+function diaInicio(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).getTime(); }
+function listaDias(desde, hasta) {
+  const out = []; const fin = Math.min(diaInicio(hasta), diaInicio(hoyISO()));
+  for (let t = diaInicio(desde); t <= fin; t += 86400000) { const d = new Date(t); out.push(hoyISO(d)); t = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  return [...new Set(out)];
+}
+function claseUso(p) { return p > 85 ? 'alto' : p >= 50 ? 'medio' : 'bajo'; }
+function colorUso(p) { return p > 85 ? 'var(--red)' : p >= 50 ? 'var(--green)' : 'var(--dim)'; }
+function fmtP(p) { return (Math.round(p * 10) / 10).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + ' %'; }
+// Une intervalos superpuestos (dos personas en la misma máquina = una sola hora de máquina)
+function unir(iv) {
+  iv.sort((a, b) => a[0] - b[0]);
+  const out = [];
+  iv.forEach(([a, b]) => { if (b <= a) return; const u = out[out.length - 1]; if (u && a <= u[1]) u[1] = Math.max(u[1], b); else out.push([a, b]); });
+  return out;
+}
+
+// Cálculo principal: horas disponibles por día y horas de máquina por recurso
+function calcularUso(regs, desde, hasta) {
+  const ahora = Date.now(), hoy = hoyISO();
+  const H = CFG.horasDisponiblesDia || 7.75;
+  const feriados = new Set(CFG.feriados || []);
+  const dias = listaDias(desde, hasta);
+  const actividad = {}, primerInicio = {};
+  regs.forEach(r => { actividad[r.fecha] = true; if (r.inicio && (!primerInicio[r.fecha] || r.inicio < primerInicio[r.fecha])) primerInicio[r.fecha] = r.inicio; });
+  const disp = {};
+  dias.forEach(d => {
+    const dow = new Date(diaInicio(d)).getDay();
+    const noLaborable = dow === 0 || dow === 6 || feriados.has(d);
+    let h = noLaborable && !actividad[d] ? 0 : H;
+    if (d === hoy) h = primerInicio[d] ? Math.min(H, (ahora - primerInicio[d]) / 3600000) : 0;
+    disp[d] = h;
+  });
+  const recursos = CFG.recursos || [];
+  const res = {};
+  recursos.forEach(rc => {
+    const porDia = {}, porHora = Object.fromEntries(HORAS_HEAT.map(h => [h, 0])), ops = {}, operarios = {};
+    dias.forEach(d => {
+      const t0 = diaInicio(d), t1 = t0 + 86400000;
+      const iv = regs.filter(r => r.recurso === rc.codigo && r.tipo !== 'Pausa' && r.fecha === d && r.inicio)
+        .map(r => [Math.max(r.inicio, t0), Math.min(r.estado === 'Abierta' ? ahora : (r.fin || r.inicio), t1)]);
+      const u = unir(iv);
+      porDia[d] = u.reduce((s, [a, b]) => s + (b - a), 0) / 3600000;
+      u.forEach(([a, b]) => {
+        for (let t = a; t < b;) {
+          const dt = new Date(t), h = dt.getHours();
+          const finHora = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), h + 1).getTime();
+          const seg = Math.min(b, finHora) - t;
+          if (porHora[h] !== undefined) porHora[h] += seg / 60000;
+          t += seg;
+        }
+      });
+    });
+    regs.filter(r => r.recurso === rc.codigo && r.tipo !== 'Pausa' && dias.includes(r.fecha)).forEach(r => {
+      const m = minutosDe(r); ops[r.operacion] = (ops[r.operacion] || 0) + m; operarios[r.operario] = (operarios[r.operario] || 0) + m;
+    });
+    const usadas = Object.values(porDia).reduce((a, b) => a + b, 0);
+    const disponibles = Object.values(disp).reduce((a, b) => a + b, 0);
+    res[rc.codigo] = { rc, porDia, porHora, ops, operarios, usadas, disponibles, pct: disponibles ? usadas / disponibles * 100 : 0 };
+  });
+  const diasHabiles = dias.filter(d => disp[d] > 0);
+  return { dias, disp, res, diasHabiles, H };
+}
+
+const SVG_MAQ = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="9" rx="1.5"/><path d="M7 9V6h10v3M6 18v2M18 18v2M8 13h4"/><circle cx="16" cy="13.5" r="1.5"/></svg>';
+const SVG_BANCO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h18M5 9v10M19 9v10M5 14h14"/><path d="M8 9V6h3v3"/></svg>';
+function placeholder(rc) {
+  return `<div class="ph">${/^BANCO/.test(rc.codigo) ? SVG_BANCO : SVG_MAQ}<span>Foto pendiente</span></div>`;
+}
+function fotoRecurso(rc) {
+  if (!rc.foto) return placeholder(rc);
+  return `<img src="${esc(rc.foto)}" alt="${esc(rc.nombre)}" loading="lazy" onerror="this.outerHTML=this.parentNode.dataset.ph">`;
+}
+
+function renderMaquinas() {
+  if (!CFG.recursos || !$('m-desde').value) return;
+  const desde = $('m-desde').value, hasta = $('m-hasta').value;
+  const U = calcularUso(REGM, desde, hasta);
+  const totalDisp = Object.values(U.disp).reduce((a, b) => a + b, 0);
+  const incluyeHoy = U.dias.includes(hoyISO());
+  const completos = U.diasHabiles.filter(d => d !== hoyISO()).length;
+  const partes = [];
+  if (completos) partes.push(`${completos} día${completos === 1 ? '' : 's'} × ${fmtHoras(U.H * 60)} h`);
+  if (incluyeHoy) partes.push(`hoy ${fmtHoras((U.disp[hoyISO()] || 0) * 60)} h (desde el primer fichaje hasta ahora)`);
+  $('maq-capacidad').innerHTML = `Capacidad disponible por recurso: <b>${fmtHoras(totalDisp * 60)} h</b>` + (partes.length ? ` = ${partes.join(' + ')}` : ' (no hubo días laborables)') +
+    '. Sábados, domingos y feriados cuentan solo si alguien fichó.';
+
+  // Quién usa cada recurso ahora
+  const enUso = {};
+  (ESTADO ? ESTADO.operarios : []).forEach(o => { const a = o.abierta; if (a && a.recurso) (enUso[a.recurso] = enUso[a.recurso] || []).push(`${o.nombre} · ${a.operacion}${a.proyecto ? ' · ' + a.proyecto : ''}`); });
+
+  const recursos = CFG.recursos;
+  $('maq-cards').innerHTML = recursos.map((rc, i) => {
+    const r = U.res[rc.codigo], c = claseUso(r.pct);
+    const ops = Object.entries(r.ops).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} <b>${fmtHoras(v)} h</b>`).join(' · ');
+    const pers = Object.entries(r.operarios).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} <b>${fmtHoras(v)} h</b>`).join(' · ');
+    const vivo = enUso[rc.codigo];
+    return `<div class="maq-card ${c === 'bajo' ? '' : c}">
+      <div class="maq-foto" data-ph="${esc(placeholder(rc))}">${fotoRecurso(rc)}
+        <span class="pill vivo ${vivo ? 'ok' : ''}" style="background:rgba(18,20,23,.85)"><span class="dot"></span> ${vivo ? 'En uso' : 'Libre'}</span></div>
+      <div class="maq-body">
+        <div class="maq-nombre">${esc(rc.nombre)}</div>
+        <div class="maq-pct ${c}">${fmtP(r.pct)}</div>
+        <div class="barra-uso"><span style="width:${Math.min(100, r.pct)}%;background:${colorUso(r.pct)}"></span><i class="m50" style="left:50%"></i><i class="m85" style="left:85%"></i></div>
+        <div class="small">${fmtHoras(r.usadas * 60)} h de máquina de ${fmtHoras(r.disponibles * 60)} h disponibles</div>
+        ${vivo ? `<div class="small" style="color:var(--green)">Ahora: ${vivo.map(esc).join('<br>')}</div>` : ''}
+        ${ops ? `<div class="maq-ops">${ops}</div><div class="maq-ops">Mano de obra: ${pers}</div>` : '<div class="maq-ops">Sin uso en el período.</div>'}
+      </div></div>`;
+  }).join('');
+
+  // Ranking
+  const rk = recursos.map(rc => U.res[rc.codigo]).sort((a, b) => b.pct - a.pct);
+  $('maq-ranking').innerHTML = `<table><thead><tr><th>Recurso</th><th>% de uso</th><th class="izq" style="min-width:160px"></th><th>Horas de máquina</th><th>Horas libres</th></tr></thead><tbody>
+    ${rk.map((r, i) => `<tr><td>${i === 0 && r.pct > 0 ? '🔴 ' : ''}${esc(r.rc.nombre)}${i === 0 && r.pct > 0 ? ' <span class="muted small">(el más cargado)</span>' : ''}</td>
+      <td style="color:${colorUso(r.pct)};font-weight:700">${fmtP(r.pct)}</td>
+      <td class="izq"><div class="barra-uso" style="min-width:140px"><span style="width:${Math.min(100, r.pct)}%;background:${colorUso(r.pct)}"></span></div></td>
+      <td>${fmtHoras(r.usadas * 60)}</td><td>${fmtHoras(Math.max(0, r.disponibles - r.usadas) * 60)}</td></tr>`).join('')}
+  </tbody></table>`;
+
+  // Día por día
+  const diasConCap = U.dias.filter(d => U.disp[d] > 0);
+  $('maq-bloque-dias').classList.toggle('hidden', diasConCap.length < 2);
+  if (diasConCap.length >= 2 && window.Chart) {
+    const labels = diasConCap.map(d => d.split('-').reverse().slice(0, 2).join('/'));
+    const datasets = recursos.map((rc, i) => ({
+      label: rc.nombre, data: diasConCap.map(d => Math.round(U.res[rc.codigo].porDia[d] / U.disp[d] * 1000) / 10),
+      borderColor: COLOR_REC[i % COLOR_REC.length], backgroundColor: COLOR_REC[i % COLOR_REC.length], tension: .25, pointRadius: 3
+    }));
+    if (chartMaq) chartMaq.destroy();
+    chartMaq = new Chart($('maq-chart'), {
+      type: 'line', data: { labels, datasets },
+      options: {
+        maintainAspectRatio: false, animation: false,
+        scales: { y: { beginAtZero: true, suggestedMax: 100, ticks: { color: '#9aa5ae', callback: v => v + ' %' }, grid: { color: '#2a3036' } },
+                  x: { ticks: { color: '#9aa5ae' }, grid: { display: false } } },
+        plugins: { legend: { labels: { color: '#f2f4f6', boxWidth: 12 } },
+                   tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtP(c.parsed.y)}` } } }
+      }
+    });
+  }
+
+  // Mapa de calor por hora
+  const nDias = U.diasHabiles.length || 1;
+  $('maq-heat').innerHTML = `<table class="heat"><thead><tr><th>Recurso</th>${HORAS_HEAT.map(h => `<th>${h} h</th>`).join('')}</tr></thead><tbody>
+    ${recursos.map(rc => `<tr><td>${esc(rc.nombre)}</td>${HORAS_HEAT.map(h => {
+      const p = U.res[rc.codigo].porHora[h] / (nDias * 60) * 100;
+      return p < 0.5 ? '<td class="cero">–</td>' : `<td style="background:rgba(${p > 85 ? '239,90,76' : p >= 50 ? '46,204,113' : '154,165,174'},${(0.15 + Math.min(p, 100) / 100 * 0.6).toFixed(2)})">${Math.round(p)}%</td>`;
+    }).join('')}</tr>`).join('')}
+  </tbody></table>`;
+}
+
+async function cargarMaquinas() {
+  $('maq-cards').innerHTML = '<p class="muted">Cargando…</p>';
+  try {
+    const r = await Api.get('registros', { desde: $('m-desde').value, hasta: $('m-hasta').value });
+    if (!r.ok) throw new Error(r.error);
+    REGM = r.registros; REGM_TS = Date.now();
+    renderMaquinas();
+  } catch (e) { $('maq-cards').innerHTML = `<p class="msg error">No se pudo cargar: ${esc(e.message)}</p>`; }
+}
+$('m-preset').addEventListener('change', e => { if (e.target.value) { setPreset(e.target.value, 'm-desde', 'm-hasta'); cargarMaquinas(); } });
+$('btn-maq').addEventListener('click', cargarMaquinas);
+function tabActiva(t) { const b = document.querySelector('.tab.active'); return b && b.dataset.tab === t; }
 
 // ---------- REPORTE ----------
 function setPreset(v, idD, idH) {
@@ -384,6 +614,7 @@ $('btn-nuevo').addEventListener('click', () => abrirModal(null));
 (async () => {
   setPreset('mes', 'desde', 'hasta'); $('preset').value = 'mes';
   setPreset('semana', 'r-desde', 'r-hasta');
+  setPreset('hoy', 'm-desde', 'm-hasta'); $('m-preset').value = 'hoy';
   try {
     const r = await Api.get('config');
     if (!r.ok) throw new Error(r.error);
@@ -396,9 +627,15 @@ $('btn-nuevo').addEventListener('click', () => abrirModal(null));
   mostrarAdmin();
   await refrescarEstado();
   cargarReporte();
+  cargarMaquinas();
   if (admin) cargarRegistros();
   setInterval(refrescarEstado, APP_CONFIG.REFRESCO_SEG * 1000);
   setInterval(renderAhora, 1000);
+  // Máquinas: si el período incluye hoy, se actualiza solo
+  setInterval(() => {
+    if (!tabActiva('maquinas') || $('m-hasta').value < hoyISO()) return;
+    if (Date.now() - REGM_TS > 60000) cargarMaquinas(); else renderMaquinas();
+  }, 15000);
 })();
 </script>
 </body>
