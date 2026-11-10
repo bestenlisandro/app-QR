@@ -696,6 +696,7 @@ function apiAdmin(body) {
   if (String(body.pin || '') !== String(getConfig().ADMIN_PIN)) return { ok: false, error: 'PIN incorrecto' };
   var quien = String(body.quien || 'Admin').slice(0, 40);
   if (body.op === 'verificar') return { ok: true };
+  if (/^(listarConfig|guardarRecurso|fotoRecurso|guardarOperacion)$/.test(body.op)) return apiConfigAdmin(body);
 
   var ops = getOperaciones();
   function opPorCod(cod) { var r = null; ops.forEach(function (o) { if (o.codigo === norm(cod)) r = o; }); return r; }
@@ -773,3 +774,121 @@ function apiAdmin(body) {
 
   return { ok: false, error: 'Operación de corrección desconocida' };
 }
+
+// ---------------------------------------------------------------------------
+// CONFIGURACIÓN DE MÁQUINAS Y OPERACIONES DESDE EL DASHBOARD (con PIN)
+// ---------------------------------------------------------------------------
+
+var CARPETA_FOTOS = 'Fotos máquinas - Control QR';
+var TIPOS_VALIDOS = ['PROYECTO', 'OPCIONAL', 'PAUSA'];
+
+/** Ejecutar una vez desde el editor para autorizar el acceso a Drive (fotos). */
+function autorizarDrive() {
+  var f = carpetaFotos();
+  Logger.log('Carpeta de fotos: ' + f.getUrl());
+}
+
+function carpetaFotos() {
+  var it = DriveApp.getFoldersByName(CARPETA_FOTOS);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(CARPETA_FOTOS);
+}
+
+function tablaCompleta(nombre, ncols) {
+  var sh = getSS().getSheetByName(nombre);
+  var n = sh.getLastRow() - 1;
+  return { sh: sh, filas: n > 0 ? sh.getRange(2, 1, n, ncols).getValues() : [] };
+}
+
+/** Código nuevo a partir del nombre, sin repetir: "Sierra circular" -> SIERRACIRCU */
+function codigoNuevo(nombre, existentes) {
+  var base = norm(nombre).slice(0, 10) || 'X';
+  if (/^(OP|PRY)/.test(base)) base = 'X' + base;
+  var cod = base, i = 2;
+  while (existentes[cod]) cod = base + (i++);
+  return cod;
+}
+
+function apiConfigAdmin(body) {
+  var c = body.cambios || {};
+
+  if (body.op === 'listarConfig') {
+    var rec = tablaCompleta(SH_REC, 5).filas.filter(function (r) { return r[0]; }).map(function (r) {
+      return { codigo: norm(r[0]), nombre: String(r[1]), foto: String(r[2] || ''), orden: Number(r[3]) || 99, activo: esSi(r[4]) };
+    });
+    var ops = tablaCompleta(SH_OPS, 6).filas.filter(function (r) { return r[0]; }).map(function (r) {
+      return { codigo: norm(r[0]), nombre: String(r[1]), tipo: String(r[2]).trim().toUpperCase(), orden: Number(r[3]) || 99, activa: esSi(r[4]), recurso: norm(r[5] || '') };
+    });
+    return { ok: true, recursos: rec, operaciones: ops };
+  }
+
+  if (body.op === 'guardarRecurso') {
+    var nombre = String(c.nombre || '').trim();
+    if (!nombre) return { ok: false, error: 'Falta el nombre de la máquina' };
+    var t = tablaCompleta(SH_REC, 5);
+    var idx = -1, existentes = {};
+    t.filas.forEach(function (r, i) { existentes[norm(r[0])] = true; if (c.codigo && norm(r[0]) === norm(c.codigo)) idx = i; });
+    if (idx >= 0) {
+      t.filas[idx][1] = nombre;
+      if (c.activo !== undefined) t.filas[idx][4] = c.activo ? 'SI' : 'NO';
+      t.sh.getRange(idx + 2, 1, 1, 5).setValues([t.filas[idx]]);
+      return { ok: true, codigo: norm(t.filas[idx][0]) };
+    }
+    var cod = codigoNuevo(nombre, existentes);
+    var orden = t.filas.reduce(function (m, r) { return Math.max(m, Number(r[3]) || 0); }, 0) + 1;
+    t.sh.appendRow([cod, nombre, '', orden, 'SI']);
+    return { ok: true, codigo: cod };
+  }
+
+  if (body.op === 'fotoRecurso') {
+    var t2 = tablaCompleta(SH_REC, 5);
+    var fila = -1;
+    t2.filas.forEach(function (r, i) { if (norm(r[0]) === norm(c.codigo)) fila = i; });
+    if (fila < 0) return { ok: false, error: 'No encontré la máquina ' + c.codigo };
+    var m = /^data:(image\/(jpeg|png|webp));base64,(.+)$/.exec(String(c.imagen || ''));
+    if (!m) return { ok: false, error: 'La foto no llegó bien. Probá de nuevo.' };
+    var blob = Utilities.newBlob(Utilities.base64Decode(m[3]), m[1], norm(c.codigo).toLowerCase() + '_' + Utilities.formatDate(new Date(), tz(), 'yyyyMMdd_HHmm') + '.jpg');
+    var carpeta = carpetaFotos();
+    var archivo = carpeta.createFile(blob);
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    // Foto anterior en Drive: se manda a la papelera
+    var prev = /[?&]id=([\w-]+)/.exec(String(t2.filas[fila][2] || ''));
+    if (prev) { try { DriveApp.getFileById(prev[1]).setTrashed(true); } catch (e) {} }
+    var url = 'https://drive.google.com/thumbnail?id=' + archivo.getId() + '&sz=w1600';
+    t2.sh.getRange(fila + 2, 3).setValue(url);
+    return { ok: true, foto: url };
+  }
+
+  if (body.op === 'guardarOperacion') {
+    var nom = String(c.nombre || '').trim();
+    var tipo = String(c.tipo || 'PROYECTO').toUpperCase();
+    if (!nom) return { ok: false, error: 'Falta el nombre de la operación' };
+    if (TIPOS_VALIDOS.indexOf(tipo) < 0) return { ok: false, error: 'Tipo inválido' };
+    var recurso = norm(c.recurso || '');
+    if (tipo === 'PAUSA') recurso = '';
+    var t3 = tablaCompleta(SH_OPS, 6);
+    var j = -1, ex = {};
+    t3.filas.forEach(function (r, i) { ex[norm(r[0])] = true; if (c.codigo && norm(r[0]) === norm(c.codigo)) j = i; });
+    if (j >= 0) {
+      if (norm(t3.filas[j][0]) === 'FIN') return { ok: false, error: 'Fin de jornada no se puede modificar' };
+      t3.filas[j][1] = nom; t3.filas[j][2] = tipo; t3.filas[j][5] = recurso;
+      if (c.activa !== undefined) t3.filas[j][4] = c.activa ? 'SI' : 'NO';
+      t3.sh.getRange(j + 2, 1, 1, 6).setValues([t3.filas[j]]);
+      return { ok: true, codigo: norm(t3.filas[j][0]) };
+    }
+    // Nueva: va después de la última operación de trabajo (antes de las pausas)
+    var codN = codigoNuevo(nom, ex);
+    var ultimaTrabajo = 0;
+    t3.filas.forEach(function (r) { var tp = String(r[2]).toUpperCase(); if (tp !== 'PAUSA' && tp !== 'FIN' && esSi(r[4])) ultimaTrabajo = Math.max(ultimaTrabajo, Number(r[3]) || 0); });
+    var filas = t3.filas.map(function (r) {
+      var tp = String(r[2]).toUpperCase();
+      if ((tp === 'PAUSA' || tp === 'FIN') && Number(r[3]) > ultimaTrabajo && Number(r[3]) < 90) r[3] = Number(r[3]) + 1;
+      return r;
+    });
+    filas.push([codN, nom, tipo, ultimaTrabajo + 1, 'SI', recurso]);
+    filas.sort(function (a, b) { return (Number(a[3]) || 99) - (Number(b[3]) || 99); });
+    t3.sh.getRange(2, 1, filas.length, 6).setValues(filas);
+    return { ok: true, codigo: codN };
+  }
+  return { ok: false, error: 'Operación desconocida' };
+}
+

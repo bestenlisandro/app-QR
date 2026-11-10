@@ -79,6 +79,10 @@ Máquinas y puestos cuya capacidad se mide en la pestaña **Máquinas** del dash
 | Foto | Ruta de la foto (`img/recursos/…jpg`, ver `webapp/img/recursos/LEEME.md`) o una URL |
 | Orden / Activo | Orden de las tarjetas / `SI` o `NO` |
 
+Las máquinas, sus fotos y las operaciones también se pueden editar desde el dashboard,
+pestaña **Configurar** (con PIN). Las fotos se guardan en la carpeta de Google Drive
+"Fotos máquinas - Control QR" de la cuenta dueña de la planilla.
+
 **Cómo se calcula el % de uso:** horas de máquina ÷ horas disponibles.
 - Horas de máquina: tiempo en que alguien la estuvo usando. Si dos personas la usan a la vez, cuenta una sola vez.
 - Horas disponibles: `HORAS_DISPONIBLES_DIA` por cada día de lunes a viernes que no sea feriado. Sábados, domingos y feriados suman solo si alguien fichó ese día. El día de hoy cuenta desde el primer fichaje hasta ahora.

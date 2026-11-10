@@ -28,6 +28,28 @@
   .barra { height: 8px; border-radius: 4px; background: var(--amber); display: inline-block; vertical-align: middle; margin-left: 8px; }
   td.estado-Abierta { color: var(--green); }
   td.estado-Cierre { color: var(--amber); }
+  /* ---- Configurar ---- */
+  .cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .cfg-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .cfg-card.inactiva { opacity: .55; }
+  .cfg-card .maq-foto { aspect-ratio: 16 / 9; }
+  .cfg-card .cuerpo { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .cfg-card input[type=text] { width: 100%; }
+  .chk { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text); font-size: .9rem; }
+  .chk input { min-height: 0; width: 18px; height: 18px; }
+  .file-btn { position: relative; overflow: hidden; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  #cfg-ops td, #cfg-ops th { white-space: normal; }
+  #cfg-ops input[type=text] { width: 100%; min-width: 150px; }
+  #cfg-ops select { width: 100%; min-width: 150px; }
+  @media (max-width: 700px) {
+    #cfg-ops thead { display: none; }
+    #cfg-ops tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
+    #cfg-ops td { display: block; border: 0; padding: 0; position: static; background: none; }
+    #cfg-ops td:first-child { grid-column: 1 / -1; }
+    #cfg-ops select, #cfg-ops input[type=text] { min-width: 0; }
+  }
+  .subiendo { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; font-weight: 700; }
   /* ---- Máquinas ---- */
   .maq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .maq-card { background: var(--panel); border: 2px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
@@ -65,6 +87,7 @@
     <button class="tab" data-tab="maquinas">Máquinas</button>
     <button class="tab" data-tab="reporte">Reporte por período</button>
     <button class="tab" data-tab="registros">Registros y correcciones</button>
+    <button class="tab" data-tab="config">Configurar</button>
   </nav>
 </header>
 
@@ -135,6 +158,34 @@
       </div>
     </div>
     <div id="reporte" class="bloque"><p class="muted">Elegí el período y tocá “Ver reporte”.</p></div>
+  </section>
+
+  <!-- ============ CONFIGURAR ============ -->
+  <section class="tabp" id="tab-config">
+    <div class="card" id="cfg-login">
+      <h2>Configurar máquinas y operaciones</h2>
+      <p class="muted small">Solo para Maxi, Daniel y Lisandro. Mismo PIN que las correcciones.</p>
+      <div class="row">
+        <div><label>Quién</label><select id="cfg-quien"><option>Maxi</option><option>Daniel</option><option>Lisandro</option></select></div>
+        <div><label>PIN</label><input type="password" id="cfg-pin" inputmode="numeric" style="width:120px"></div>
+        <button class="btn primary" id="cfg-btn-pin">Entrar</button>
+      </div>
+    </div>
+    <div id="cfg-box" class="hidden">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Máquinas</h2>
+        <button class="btn primary" id="cfg-add-maq">+ Agregar máquina</button>
+      </div>
+      <p class="muted small">Para la foto: celular horizontal, lente 1x, la máquina entera y con buena luz. Se puede sacar en el momento o elegir de la galería.</p>
+      <div class="cfg-grid" id="cfg-maqs"><p class="muted">Cargando…</p></div>
+
+      <div class="row bloque" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Operaciones</h2>
+        <button class="btn primary" id="cfg-add-op">+ Agregar operación</button>
+      </div>
+      <p class="muted small">Elegí en qué máquina se hace cada operación: así se calcula su capacidad utilizada. Si agregás una operación, imprimí su cartel en el <a href="generador-qr.html" target="_blank">generador de QR</a>.</p>
+      <div class="tabla-wrap" id="cfg-ops"></div>
+    </div>
   </section>
 
   <!-- ============ REGISTROS ============ -->
@@ -514,11 +565,13 @@ $('btn-csv').addEventListener('click', async () => {
 function mostrarAdmin() {
   $('login-box').classList.toggle('hidden', !!admin);
   $('admin-box').classList.toggle('hidden', !admin);
+  $('cfg-login').classList.toggle('hidden', !!admin);
+  $('cfg-box').classList.toggle('hidden', !admin);
+  if (admin && !CFG_ADMIN) cargarConfigAdmin();
   if (admin) $('quien-txt').innerHTML = `Corrigiendo como <b>${esc(admin.quien)}</b> · <a href="#" id="salir">salir</a>`;
   const s = $('salir'); if (s) s.addEventListener('click', e => { e.preventDefault(); admin = null; try { sessionStorage.removeItem('dash_admin'); } catch (x) {} mostrarAdmin(); });
 }
-$('btn-pin').addEventListener('click', async () => {
-  const pin = $('pin').value, quien = $('quien').value;
+async function ingresar(pin, quien) {
   try {
     const r = await Api.post('admin', { op: 'verificar', pin, quien });
     if (!r.ok) throw new Error(r.error);
@@ -526,8 +579,128 @@ $('btn-pin').addEventListener('click', async () => {
     try { sessionStorage.setItem('dash_admin', JSON.stringify(admin)); } catch (e) {}
     mostrarAdmin(); cargarRegistros();
   } catch (e) { toast(e.message, true); }
-});
+}
+$('btn-pin').addEventListener('click', () => ingresar($('pin').value, $('quien').value));
 $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-pin').click(); });
+$('cfg-btn-pin').addEventListener('click', () => ingresar($('cfg-pin').value, $('cfg-quien').value));
+$('cfg-pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('cfg-btn-pin').click(); });
+
+// ---------- CONFIGURAR MÁQUINAS Y OPERACIONES ----------
+let CFG_ADMIN = null;
+const TIPO_TXT = { PROYECTO: 'Requiere proyecto', OPCIONAL: 'Proyecto opcional', PAUSA: 'Pausa' };
+async function adminPost(op, cambios) {
+  const r = await Api.post('admin', { pin: admin.pin, quien: admin.quien, op, cambios });
+  if (!r.ok) {
+    if (/PIN/.test(r.error)) { admin = null; try { sessionStorage.removeItem('dash_admin'); } catch (e) {} mostrarAdmin(); }
+    throw new Error(r.error);
+  }
+  return r;
+}
+async function cargarConfigAdmin() {
+  try {
+    CFG_ADMIN = await adminPost('listarConfig');
+    renderConfig();
+  } catch (e) { $('cfg-maqs').innerHTML = `<p class="msg error">${esc(e.message)}</p>`; }
+}
+async function refrescarTodo() {
+  await cargarConfigAdmin();
+  try { const r = await Api.get('config'); if (r.ok) { CFG = r; renderMaquinas(); } } catch (e) {}
+}
+function renderConfig() {
+  if (!CFG_ADMIN) return;
+  const usos = {};
+  CFG_ADMIN.operaciones.filter(o => o.activa && o.recurso).forEach(o => (usos[o.recurso] = usos[o.recurso] || []).push(o.nombre));
+  $('cfg-maqs').innerHTML = CFG_ADMIN.recursos.map(rc => `
+    <div class="cfg-card ${rc.activo ? '' : 'inactiva'}" data-cod="${esc(rc.codigo)}">
+      <div class="maq-foto" data-ph="${esc(placeholder(rc))}">${fotoRecurso(rc)}</div>
+      <div class="cuerpo">
+        <input type="text" class="cfg-nombre" value="${esc(rc.nombre)}" maxlength="40">
+        <div class="muted small">Se usa en: ${usos[rc.codigo] ? esc([...new Set(usos[rc.codigo])].join(', ')) : 'ninguna operación'}</div>
+        <label class="chk"><input type="checkbox" class="cfg-activo" ${rc.activo ? 'checked' : ''}> Activa (se muestra en el dashboard)</label>
+        <div class="row">
+          <span class="btn small file-btn">📷 ${rc.foto && !/img\/recursos/.test(rc.foto) ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/*" class="cfg-foto"></span>
+          <button class="btn small primary cfg-guardar">Guardar</button>
+        </div>
+      </div>
+    </div>`).join('');
+  $('cfg-maqs').querySelectorAll('.cfg-card').forEach(card => {
+    const cod = card.dataset.cod;
+    card.querySelector('.cfg-guardar').addEventListener('click', async () => {
+      try {
+        await adminPost('guardarRecurso', { codigo: cod, nombre: card.querySelector('.cfg-nombre').value, activo: card.querySelector('.cfg-activo').checked });
+        toast('Máquina guardada'); refrescarTodo();
+      } catch (e) { toast(e.message, true); }
+    });
+    card.querySelector('.cfg-foto').addEventListener('change', async ev => {
+      const file = ev.target.files[0]; if (!file) return;
+      const caja = card.querySelector('.maq-foto');
+      const aviso = document.createElement('div'); aviso.className = 'subiendo'; aviso.textContent = 'Subiendo foto…'; caja.appendChild(aviso);
+      try {
+        const imagen = await achicarFoto(file);
+        await adminPost('fotoRecurso', { codigo: cod, imagen });
+        toast('Foto actualizada'); refrescarTodo();
+      } catch (e) { toast('No se pudo subir: ' + e.message, true); aviso.remove(); }
+    });
+  });
+
+  const recActivos = CFG_ADMIN.recursos.filter(r => r.activo);
+  const opcRec = sel => `<option value="">— Ninguna —</option>` + recActivos.map(r => `<option value="${esc(r.codigo)}" ${r.codigo === sel ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('');
+  const opcTipo = sel => Object.entries(TIPO_TXT).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v}</option>`).join('');
+  const fila = o => `<tr data-cod="${esc(o.codigo || '')}" class="${o.activa === false ? 'cero' : ''}">
+      <td><input type="text" class="op-nombre" value="${esc(o.nombre || '')}" maxlength="40" placeholder="Nombre de la operación"><div class="muted small">${o.codigo ? 'QR: OP-' + esc(o.codigo) : 'nueva'}</div></td>
+      <td><select class="op-tipo">${opcTipo(o.tipo || 'PROYECTO')}</select></td>
+      <td><select class="op-rec">${opcRec(o.recurso || '')}</select></td>
+      <td><label class="chk"><input type="checkbox" class="op-activa" ${o.activa !== false ? 'checked' : ''}> Activa</label></td>
+      <td><button class="btn small primary op-guardar">Guardar</button></td></tr>`;
+  const ops = CFG_ADMIN.operaciones.filter(o => o.tipo !== 'FIN');
+  $('cfg-ops').innerHTML = `<table><thead><tr><th class="izq">Operación</th><th class="izq">Tipo</th><th class="izq">Máquina</th><th class="izq">Estado</th><th></th></tr></thead>
+    <tbody id="cfg-ops-body">${ops.map(fila).join('')}</tbody></table>`;
+  $('cfg-ops').querySelectorAll('tbody tr').forEach(conectarFilaOp);
+  $('cfg-add-op').onclick = () => {
+    const tb = $('cfg-ops-body');
+    tb.insertAdjacentHTML('afterbegin', fila({ tipo: 'PROYECTO', activa: true }));
+    conectarFilaOp(tb.firstElementChild);
+    tb.firstElementChild.querySelector('.op-nombre').focus();
+  };
+}
+function conectarFilaOp(tr) {
+  tr.querySelector('.op-guardar').addEventListener('click', async () => {
+    const cambios = { codigo: tr.dataset.cod || undefined, nombre: tr.querySelector('.op-nombre').value, tipo: tr.querySelector('.op-tipo').value,
+      recurso: tr.querySelector('.op-rec').value, activa: tr.querySelector('.op-activa').checked };
+    try {
+      const r = await adminPost('guardarOperacion', cambios);
+      toast(tr.dataset.cod ? 'Operación guardada' : `Operación creada (QR: OP-${r.codigo}). Imprimí su cartel en el generador.`);
+      refrescarTodo();
+    } catch (e) { toast(e.message, true); }
+  });
+}
+$('cfg-add-maq').addEventListener('click', () => {
+  if ($('cfg-nueva')) { $('cfg-nueva').querySelector('input').focus(); return; }
+  $('cfg-maqs').insertAdjacentHTML('afterbegin', `<div class="cfg-card" id="cfg-nueva"><div class="cuerpo">
+    <label>Nombre de la máquina nueva</label><input type="text" maxlength="40" placeholder="Ej. Sierra circular">
+    <div class="row"><button class="btn small" id="cfg-nueva-cancel">Cancelar</button><button class="btn small primary" id="cfg-nueva-ok">Agregar</button></div>
+    <p class="muted small" style="margin:0">Después le subís la foto y le asignás operaciones.</p></div></div>`);
+  const box = $('cfg-nueva'), inp = box.querySelector('input'); inp.focus();
+  $('cfg-nueva-cancel').onclick = () => box.remove();
+  const ok = async () => {
+    if (!inp.value.trim()) return toast('Escribí el nombre', true);
+    try { await adminPost('guardarRecurso', { nombre: inp.value.trim() }); toast('Máquina agregada'); refrescarTodo(); }
+    catch (e) { toast(e.message, true); }
+  };
+  $('cfg-nueva-ok').onclick = ok; inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok(); });
+});
+// Achica la foto en el celular antes de subirla (máx. 1600 px, JPG)
+async function achicarFoto(file) {
+  let img;
+  try { img = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => mal(new Error('formato de imagen no soportado')); i.src = URL.createObjectURL(file); });
+  }
+  const w = img.width, h = img.height, k = Math.min(1, 1600 / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.82);
+}
 $('btn-r-cargar').addEventListener('click', cargarRegistros);
 $('r-revisar').addEventListener('change', renderRegistros);
 $('r-operario').addEventListener('change', renderRegistros);
