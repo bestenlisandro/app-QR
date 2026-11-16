@@ -173,6 +173,13 @@
     </div>
     <div id="cfg-box" class="hidden">
       <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Personas</h2>
+        <button class="btn primary" id="cfg-add-per">+ Agregar persona</button>
+      </div>
+      <p class="muted small">Quienes fichan con el celular o con una pistola. Para dar de baja a alguien, destildá "Activa": sus registros se conservan. El prefijo es lo que su pistola agrega a cada lectura; si lo dejás vacío se asigna solo.</p>
+      <div class="tabla-wrap" id="cfg-per" style="margin-bottom:24px"></div>
+
+      <div class="row" style="justify-content:space-between;align-items:center">
         <h2 style="margin:0">Máquinas</h2>
         <button class="btn primary" id="cfg-add-maq">+ Agregar máquina</button>
       </div>
@@ -606,8 +613,35 @@ async function refrescarTodo() {
   await cargarConfigAdmin();
   try { const r = await Api.get('config'); if (r.ok) { CFG = r; renderMaquinas(); } } catch (e) {}
 }
+function renderPersonas() {
+  const per = CFG_ADMIN.operarios || [];
+  const fila = p => `<tr data-nombre="${esc(p.nombre || '')}">
+      <td>${p.nombre ? `<b>${esc(p.nombre)}</b>` : '<input type="text" class="per-nombre" maxlength="40" placeholder="Nombre y apellido">'}</td>
+      <td><input type="text" class="per-pref" value="${esc(p.prefijo || '')}" maxlength="6" placeholder="automático" style="width:110px;text-transform:uppercase"></td>
+      <td><label class="chk"><input type="checkbox" class="per-activo" ${p.activo !== false ? 'checked' : ''}> Activa</label></td>
+      <td><button class="btn small primary per-guardar">${p.nombre ? 'Guardar' : 'Agregar'}</button></td></tr>`;
+  $('cfg-per').innerHTML = `<table><thead><tr><th class="izq">Nombre</th><th class="izq">Prefijo de pistola</th><th class="izq">Estado</th><th></th></tr></thead>
+    <tbody id="cfg-per-body">${per.map(fila).join('')}</tbody></table>`;
+  const conectar = tr => tr.querySelector('.per-guardar').addEventListener('click', async () => {
+    const nombre = tr.dataset.nombre || tr.querySelector('.per-nombre').value.trim();
+    if (!nombre) return toast('Escribí el nombre', true);
+    try {
+      const r = await adminPost('guardarOperario', { nombre, prefijo: tr.querySelector('.per-pref').value.trim(), activo: tr.querySelector('.per-activo').checked });
+      toast(r.nuevo ? `${r.nombre} agregado/a (prefijo de pistola ${r.prefijo})` : 'Guardado');
+      refrescarTodo();
+    } catch (e) { toast(e.message, true); }
+  });
+  $('cfg-per-body').querySelectorAll('tr').forEach(conectar);
+  $('cfg-add-per').onclick = () => {
+    const tb = $('cfg-per-body');
+    if (tb.querySelector('.per-nombre')) { tb.querySelector('.per-nombre').focus(); return; }
+    tb.insertAdjacentHTML('beforeend', fila({ activo: true }));
+    conectar(tb.lastElementChild); tb.lastElementChild.querySelector('.per-nombre').focus();
+  };
+}
 function renderConfig() {
   if (!CFG_ADMIN) return;
+  renderPersonas();
   const usos = {};
   CFG_ADMIN.operaciones.filter(o => o.activa && o.recurso).forEach(o => (usos[o.recurso] = usos[o.recurso] || []).push(o.nombre));
   $('cfg-maqs').innerHTML = CFG_ADMIN.recursos.map(rc => `

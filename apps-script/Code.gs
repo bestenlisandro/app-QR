@@ -696,7 +696,7 @@ function apiAdmin(body) {
   if (String(body.pin || '') !== String(getConfig().ADMIN_PIN)) return { ok: false, error: 'PIN incorrecto' };
   var quien = String(body.quien || 'Admin').slice(0, 40);
   if (body.op === 'verificar') return { ok: true };
-  if (/^(listarConfig|guardarRecurso|fotoRecurso|guardarOperacion)$/.test(body.op)) return apiConfigAdmin(body);
+  if (/^(listarConfig|guardarRecurso|fotoRecurso|guardarOperacion|guardarOperario)$/.test(body.op)) return apiConfigAdmin(body);
 
   var ops = getOperaciones();
   function opPorCod(cod) { var r = null; ops.forEach(function (o) { if (o.codigo === norm(cod)) r = o; }); return r; }
@@ -818,7 +818,10 @@ function apiConfigAdmin(body) {
     var ops = tablaCompleta(SH_OPS, 6).filas.filter(function (r) { return r[0]; }).map(function (r) {
       return { codigo: norm(r[0]), nombre: String(r[1]), tipo: String(r[2]).trim().toUpperCase(), orden: Number(r[3]) || 99, activa: esSi(r[4]), recurso: norm(r[5] || '') };
     });
-    return { ok: true, recursos: rec, operaciones: ops };
+    var per = tablaCompleta(SH_OPER, 3).filas.filter(function (r) { return r[0]; }).map(function (r) {
+      return { nombre: String(r[0]).trim(), prefijo: norm(r[1]), activo: esSi(r[2]) };
+    });
+    return { ok: true, recursos: rec, operaciones: ops, operarios: per };
   }
 
   if (body.op === 'guardarRecurso') {
@@ -888,6 +891,37 @@ function apiConfigAdmin(body) {
     filas.sort(function (a, b) { return (Number(a[3]) || 99) - (Number(b[3]) || 99); });
     t3.sh.getRange(2, 1, filas.length, 6).setValues(filas);
     return { ok: true, codigo: codN };
+  }
+  if (body.op === 'guardarOperario') {
+    // Personas que fichan. El nombre de alguien que ya existe no se cambia (sus registros quedan con ese nombre).
+    var t4 = tablaCompleta(SH_OPER, 3);
+    var nombreP = String(c.nombre || '').trim().replace(/\s+/g, ' ');
+    if (!nombreP) return { ok: false, error: 'Falta el nombre' };
+    var k = -1, prefijos = {};
+    t4.filas.forEach(function (r, i) {
+      if (String(r[0]).trim().toLowerCase() === nombreP.toLowerCase()) k = i;
+      else if (r[1]) prefijos[norm(r[1])] = String(r[0]);
+    });
+    var pref = norm(c.prefijo || '');
+    if (!pref && k >= 0) pref = norm(t4.filas[k][1]);
+    if (!pref) { // prefijo automático: inicial + número libre (ej. D4)
+      var ini = norm(nombreP).charAt(0) || 'X', num = 1;
+      if (ini === 'O' || ini === 'P') ini = 'X' + ini;
+      while (prefijos[ini + num]) num++;
+      pref = ini + num;
+    }
+    if (/^(OP|PRY)/.test(pref)) return { ok: false, error: 'El prefijo no puede empezar con OP ni PRY' };
+    if (prefijos[pref]) return { ok: false, error: 'El prefijo ' + pref + ' ya es de ' + prefijos[pref] };
+    var choca = Object.keys(prefijos).filter(function (p) { return p.indexOf(pref) === 0 || pref.indexOf(p) === 0; });
+    if (choca.length) return { ok: false, error: 'El prefijo ' + pref + ' se confunde con ' + choca[0] + ' (' + prefijos[choca[0]] + '). Elegí otro.' };
+    var activoP = c.activo === undefined ? true : !!c.activo;
+    if (k >= 0) {
+      t4.filas[k][1] = pref; t4.filas[k][2] = activoP ? 'SI' : 'NO';
+      t4.sh.getRange(k + 2, 1, 1, 3).setValues([t4.filas[k]]);
+      return { ok: true, nombre: String(t4.filas[k][0]), prefijo: pref, nuevo: false };
+    }
+    t4.sh.appendRow([nombreP, pref, activoP ? 'SI' : 'NO']);
+    return { ok: true, nombre: nombreP, prefijo: pref, nuevo: true };
   }
   return { ok: false, error: 'Operación desconocida' };
 }
