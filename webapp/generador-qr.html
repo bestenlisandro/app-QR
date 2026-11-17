@@ -47,8 +47,13 @@
   <div class="controles" style="display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px,1fr));">
     <div class="card">
       <h2>1 · QR de operaciones (carteles fijos)</h2>
-      <p class="muted small">Se imprimen una sola vez y se pegan en cada puesto. Incluye Descanso, Almuerzo, Pausa y Fin de jornada.</p>
-      <div class="row">
+      <p class="muted small">Se imprimen una sola vez y se pegan en cada puesto. Incluye Descanso, Almuerzo, Pausa y Fin de jornada. Destildá las que no quieras reimprimir.</p>
+      <div class="row" style="margin-bottom:6px">
+        <button class="btn small" id="ops-todas">Marcar todas</button>
+        <button class="btn small" id="ops-ninguna">Ninguna</button>
+      </div>
+      <div class="lista-proy" id="lista-ops"><span class="muted">Cargando…</span></div>
+      <div class="row" style="margin-top:10px">
         <button class="btn primary" id="btn-ops-grandes">Carteles grandes (1 por hoja)</button>
         <button class="btn" id="btn-ops-chicos">Etiquetas (6 por hoja)</button>
       </div>
@@ -60,6 +65,33 @@
       <div class="row" style="margin-top:10px">
         <div style="flex:1"><label>O escribir un ID a mano</label><input id="proy-manual" placeholder="Ej: 104" style="width:100%"></div>
         <button class="btn primary" id="btn-proy">Generar seleccionados</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>3 · Agregar un QR nuevo</h2>
+      <p class="muted small">Crea una operación nueva en la planilla (pestaña <b>Operaciones</b>) y arma su cartel para imprimir. Desde ese momento las pistolas y celulares la reconocen y su tiempo aparece en el dashboard.</p>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn small" id="nuevo-info">＋ Información</button>
+      </div>
+      <div style="display:grid; gap:10px">
+        <div><label>Nombre del QR</label><input id="nuevo-nombre" maxlength="40" placeholder="Ej: Información" style="width:100%"></div>
+        <div class="row">
+          <div style="flex:1; min-width:160px"><label>Cómo se carga el tiempo</label>
+            <select id="nuevo-tipo" style="width:100%">
+              <option value="OPCIONAL">Proyecto opcional (si no hay, va a GENERAL)</option>
+              <option value="PROYECTO">Requiere proyecto</option>
+              <option value="PAUSA">Pausa (no productivo)</option>
+            </select></div>
+          <div style="flex:1; min-width:160px"><label>Máquina (opcional)</label><select id="nuevo-rec" style="width:100%"><option value="">— Ninguna —</option></select></div>
+        </div>
+        <div class="row">
+          <div style="flex:1; min-width:120px"><label>Quién lo crea</label><input id="nuevo-quien" maxlength="40" placeholder="Ej: Maxi" style="width:100%"></div>
+          <div style="flex:1; min-width:120px"><label>PIN</label><input id="nuevo-pin" type="password" inputmode="numeric" maxlength="12" style="width:100%"></div>
+        </div>
+        <div class="row">
+          <select id="nuevo-formato"><option value="1">Cartel grande (1 por hoja)</option><option value="6">Etiqueta (6 por hoja)</option></select>
+          <button class="btn primary" id="btn-nuevo" style="flex:1">Crear y generar QR</button>
+        </div>
       </div>
     </div>
   </div>
@@ -108,18 +140,91 @@ function nombreRecurso(cod) {
   return r ? r.nombre : (REC_DEFAULT[cod] || cod);
 }
 
-function etiquetasOps() {
-  return (CFG.operaciones.length ? CFG.operaciones : OPS_DEFAULT).map(o => ({
+function listaOps() { return CFG.operaciones.length ? CFG.operaciones : OPS_DEFAULT; }
+
+function etiquetaOp(o) {
+  return {
     codigo: 'OP-' + o.codigo,
     t1: o.nombre,
     t1b: o.recurso && /^BANCO/.test(o.recurso) ? nombreRecurso(o.recurso) : '',
     t2: o.tipo === 'PAUSA' ? 'Escanear al empezar y al volver' : o.tipo === 'FIN' ? 'Escanear al irse' : o.tipo === 'OPCIONAL' ? 'Proyecto opcional · escanear al empezar y al terminar' : 'Escanear primero el proyecto · al terminar, de nuevo este',
     tag: o.recurso && !/^BANCO/.test(o.recurso) ? nombreRecurso(o.recurso) : (TIPO_TXT[o.tipo] || 'Operación')
-  }));
+  };
 }
 
-$('btn-ops-grandes').addEventListener('click', () => render(etiquetasOps(), 1));
-$('btn-ops-chicos').addEventListener('click', () => render(etiquetasOps(), 6));
+function etiquetasOps() {
+  const marcadas = new Set([...document.querySelectorAll('#lista-ops input:checked')].map(i => i.value));
+  return listaOps().filter(o => marcadas.has(o.codigo)).map(etiquetaOp);
+}
+
+function pintarListaOps() {
+  $('lista-ops').innerHTML = listaOps().map(o => {
+    const banco = /^BANCO(\d+)$/.exec(o.recurso || '');
+    return `<label><input type="checkbox" value="${esc(o.codigo)}" checked> <b>${esc(o.nombre)}</b>${banco ? ' · Banco ' + banco[1] : ''} <span class="muted">OP-${esc(o.codigo)}</span></label>`;
+  }).join('');
+}
+function pintarRecursos() {
+  const recs = CFG.recursos && CFG.recursos.length ? CFG.recursos : Object.entries(REC_DEFAULT).map(([codigo, nombre]) => ({ codigo, nombre }));
+  $('nuevo-rec').innerHTML = '<option value="">— Ninguna —</option>' + recs.map(r => `<option value="${esc(r.codigo)}">${esc(r.nombre)}</option>`).join('');
+}
+
+function generarOps(porHoja) {
+  const et = etiquetasOps();
+  if (!et.length) { alertar('Marcá al menos una operación.'); return; }
+  render(et, porHoja);
+}
+$('btn-ops-grandes').addEventListener('click', () => generarOps(1));
+$('btn-ops-chicos').addEventListener('click', () => generarOps(6));
+$('ops-todas').addEventListener('click', () => document.querySelectorAll('#lista-ops input').forEach(i => (i.checked = true)));
+$('ops-ninguna').addEventListener('click', () => document.querySelectorAll('#lista-ops input').forEach(i => (i.checked = false)));
+
+// ---- 3 · QR nuevo: se da de alta como operación en la planilla (con PIN) ----
+try {
+  const a = JSON.parse(sessionStorage.getItem('gen_admin') || 'null');
+  if (a) { $('nuevo-quien').value = a.quien || ''; $('nuevo-pin').value = a.pin || ''; }
+} catch (e) {}
+$('nuevo-info').addEventListener('click', () => {
+  $('nuevo-nombre').value = 'Información';
+  $('nuevo-tipo').value = 'OPCIONAL';
+  $('nuevo-rec').value = '';
+  ($('nuevo-pin').value ? $('btn-nuevo') : $('nuevo-pin')).focus();
+});
+$('nuevo-tipo').addEventListener('change', () => { $('nuevo-rec').disabled = $('nuevo-tipo').value === 'PAUSA'; if ($('nuevo-rec').disabled) $('nuevo-rec').value = ''; });
+const sinTildes = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+$('btn-nuevo').addEventListener('click', async () => {
+  const nombre = $('nuevo-nombre').value.trim().replace(/\s+/g, ' ');
+  const tipo = $('nuevo-tipo').value, recurso = tipo === 'PAUSA' ? '' : $('nuevo-rec').value;
+  const pin = $('nuevo-pin').value.trim(), quien = $('nuevo-quien').value.trim() || 'Generador QR';
+  const porHoja = Number($('nuevo-formato').value);
+  if (!nombre) { alertar('Escribí el nombre del QR.'); return; }
+
+  // Si ya existe una operación con ese nombre (y la misma máquina), no se duplica: se imprime la existente.
+  const existente = CFG.operaciones.find(o => sinTildes(o.nombre) === sinTildes(nombre) && (o.recurso || '') === recurso);
+  if (existente) {
+    render([etiquetaOp(existente)], porHoja);
+    avisar(`"${existente.nombre}" ya existía (OP-${existente.codigo}). Te armé su cartel.`);
+    return;
+  }
+  if (!pin) { alertar('Poné el PIN (el mismo de Correcciones del dashboard).'); $('nuevo-pin').focus(); return; }
+
+  const btn = $('btn-nuevo');
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const r = await Api.post('admin', { pin, quien, op: 'guardarOperacion', cambios: { nombre, tipo, recurso } });
+    if (!r.ok) throw new Error(r.error);
+    try { sessionStorage.setItem('gen_admin', JSON.stringify({ pin, quien })); } catch (e) {}
+    await cargarConfig();
+    const op = CFG.operaciones.find(o => o.codigo === r.codigo) || { codigo: r.codigo, nombre, tipo, recurso };
+    render([etiquetaOp(op)], porHoja);
+    $('nuevo-nombre').value = '';
+    avisar(`Listo: se creó "${nombre}" (QR: OP-${r.codigo}). Imprimilo y pegalo en el taller.`);
+  } catch (e) {
+    alertar('No se pudo crear: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear y generar QR';
+  }
+});
 $('btn-proy').addEventListener('click', () => {
   const sel = [...document.querySelectorAll('#lista-proy input:checked')].map(i => CFG.proyectos.find(p => p.id === i.value));
   const manual = $('proy-manual').value.trim();
@@ -135,13 +240,22 @@ $('btn-proy').addEventListener('click', () => {
 $('btn-print').addEventListener('click', () => window.print());
 
 function alertar(t) { const d = document.createElement('div'); d.className = 'toast error'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 4000); }
+function avisar(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 5000); }
 
+async function cargarConfig() {
+  const r = await Api.get('config');
+  if (!r.ok) throw new Error(r.error);
+  CFG = r;
+  pintarListaOps();
+  pintarRecursos();
+}
+
+pintarListaOps();
+pintarRecursos();
 (async () => {
   const el = $('estado-red');
   try {
-    const r = await Api.get('config');
-    if (!r.ok) throw new Error(r.error);
-    CFG = r;
+    await cargarConfig();
     el.className = 'pill ok'; el.innerHTML = '<span class="dot"></span> Conectado';
     $('lista-proy').innerHTML = CFG.proyectos.length
       ? CFG.proyectos.map(p => `<label><input type="checkbox" value="${esc(p.id)}"> <b>${esc(p.id)}</b> <span class="muted">${esc(p.cliente)}</span></label>`).join('')

@@ -25,7 +25,7 @@ dashboard desde cualquier celular o PC.
 | `webapp/estacion.html` | PC compartida del taller | Recibe las 3 pistolas. Reconoce a cada operario por el **prefijo** de su pistola y muestra qué está haciendo cada uno. Si se corta internet, guarda las lecturas y las manda después. |
 | `webapp/index.html` | Celular del operario | Alternativa a la pistola: escanea con la cámara. |
 | `webapp/dashboard.html` | Maxi, Daniel, Lisandro | **Ahora** (qué hace cada uno y desde cuándo), **Máquinas** (foto y % de capacidad utilizada de escuadradora, pegadora, múltiple y bancos, cuello de botella, uso día por día y por hora), **Reporte por período** (horas y % por operario, operación, proyecto y día; descarga a Excel) y **Correcciones** con PIN. |
-| `webapp/generador-qr.html` | Maxi | Imprime los carteles de operaciones (una vez) y los QR de cada proyecto. |
+| `webapp/generador-qr.html` | Maxi | Imprime los carteles de operaciones (todos o los que se elijan), los QR de cada proyecto y permite **agregar un QR nuevo** (ej. Información): lo da de alta en la planilla con el PIN y arma el cartel. |
 
 ## Cómo funciona un escaneo
 
