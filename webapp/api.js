@@ -69,6 +69,7 @@ const Sonido = (() => {
   function tono(freq, dur, delay = 0) {
     try {
       ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.frequency.value = freq; o.type = 'square';
       g.gain.value = 0.15;
@@ -77,7 +78,17 @@ const Sonido = (() => {
       o.start(t); o.stop(t + dur);
     } catch (e) {}
   }
+  // iPhone/Android no dejan sonar hasta que el usuario toca la pantalla: el primer toque "despierta" el audio.
+  function desbloquear() {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) {}
+  }
+  ['touchstart', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, desbloquear, { passive: true }));
   return {
+    desbloquear,
+    escaneo() { tono(1800, 0.09); }, // pitido corto apenas la cámara lee un QR
     ok() { tono(1200, 0.08); },
     inicio() { tono(900, 0.08); tono(1400, 0.1, 0.1); },
     cierre() { tono(1400, 0.08); tono(900, 0.12, 0.1); },

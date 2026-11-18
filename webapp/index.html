@@ -13,6 +13,14 @@
   #reader { width: 100%; border-radius: var(--radius); overflow: hidden; background: #000; min-height: 260px; }
   #reader video { object-fit: cover; }
   .estado-actual { margin: 14px 0; }
+  .reader-box { position: relative; }
+  .scan-ok { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: rgba(10, 30, 18, .82); border-radius: var(--radius); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 5; }
+  .scan-ok.visible { opacity: 1; }
+  .scan-ok .tilde { width: 84px; height: 84px; border-radius: 50%; background: var(--green); color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 54px; font-weight: 900; line-height: 1; transform: scale(.6); transition: transform .2s; }
+  .scan-ok.visible .tilde { transform: scale(1); }
+  .scan-ok .texto { color: #fff; font-size: 1.5rem; font-weight: 800; text-align: center; }
   .ultimo { font-size: 1.05rem; padding: 12px; border-radius: 10px; background: var(--panel-2); margin-top: 12px; min-height: 48px; }
 </style>
 </head>
@@ -38,7 +46,10 @@
   <!-- Escaneo continuo -->
   <section class="screen" id="scr-scan">
     <div class="op-card estado-actual" id="card-estado"></div>
-    <div id="reader"></div>
+    <div class="reader-box">
+      <div id="reader"></div>
+      <div class="scan-ok" id="scan-ok" aria-live="polite"><div class="tilde">✓</div><div class="texto">Código Escaneado OK !</div></div>
+    </div>
     <p class="muted small" style="margin:8px 0 0">Apuntá al QR del <b>proyecto</b> y después al de la <b>operación</b>. Para terminar, escaneá de nuevo la misma operación.</p>
     <div class="ultimo" id="ultimo">&nbsp;</div>
     <div class="row" style="margin-top:16px">
@@ -80,10 +91,21 @@ const cola = crearCola('celular_cola', (item, res) => {
 function vibrar(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
 function mostrar(t, clase) { const el = $('ultimo'); el.textContent = t; el.className = 'ultimo msg ' + (clase || ''); }
 
+let timerScanOk = null;
+function avisoEscaneoOk() {
+  Sonido.escaneo();
+  vibrar(80);
+  const el = $('scan-ok');
+  el.classList.add('visible');
+  clearTimeout(timerScanOk);
+  timerScanOk = setTimeout(() => el.classList.remove('visible'), 1500);
+}
+
 function onScan(texto) {
   const ahora = Date.now();
   if (texto === ultimoCodigo && ahora - ultimoTs < 4000) return; // la cámara lee el mismo QR muchas veces seguidas
   ultimoCodigo = texto; ultimoTs = ahora;
+  avisoEscaneoOk();
   mostrar('Enviando ' + texto + '…');
   cola.agregar({ codigo: texto, operario, ts: ahora, origen: 'Celular' });
 }
