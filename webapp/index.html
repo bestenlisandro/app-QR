@@ -78,7 +78,7 @@ const cola = crearCola('celular_cola', (item, res) => {
   setRed(true);
   if (!res.ok) { Sonido.error(); vibrar([300, 100, 300]); mostrar('✖ ' + res.error, 'error'); return; }
   if (res.alerta) { Sonido.alerta(); vibrar([200, 100, 200, 100, 200]); }
-  else { (res.tipo === 'inicio' ? Sonido.inicio : res.tipo === 'proyecto' ? Sonido.ok : Sonido.cierre)(); vibrar(120); }
+  else vibrar(120); // sin sonido: el pitido ya sonó al leer el QR
   mostrar((res.alerta ? '⚠ ' : '✔ ') + res.mensaje.replace(operario + ': ', ''), res.alerta ? 'alerta' : 'ok');
   refrescar();
 }, (n, sinRed) => {
